@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>Cloud Firewall</title>
+    <!-- Jquqry JS -->
+    <script src="//code.jquery.com/jquery-1.11.3.min.js"></script>
+    <!-- Bootstarp -->
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+    <link rel="stylesheet" href="static/css/style.css" />
+
+    </head>
+<body class="">
+
+    <section id="top_bar">
+        <nav class="navbar navbar-inverse navbar-fixed-top">
+            <div class="container-fluid">
+                <div class="navbar-header">
+                    <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                    <div>
+                        <a class="navbar-brand" href="#" style="float: right;">Cloud Firewall</a>
+                        <img src="static/imgs/fire-ball-icon-hi.png" width="50" height="50" alt="fire icon">
+                    </div>
+                </div>
+                <div id="navbar" class="navbar-collapse collapse">
+                    <ul class="nav navbar-nav navbar-right topBarLinks">
+                        <li class="dashboardLink"><a href="#">Dashboard</a></li>
+                        <li class="settingsLink"><a href="#">Settings</a></li>
+                        <li class="logoutLink"><a href="#">Logout</a></li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </section>
+
+    <section id="main" class="container-fluid">
+
+        <div id="login" class="col-xs-3 col-centered hidden">
+            <div>
+
+                <form class="form-signin">
+                    <h2 class="form-signin-heading text-center">Please sign in</h2>
+                    <label for="loginInputUsername" class="sr-only">Username</label>
+                    <input type="text" id="loginInputUsername" class="form-control" placeholder="Username" required autofocus>
+                    <label for="loginInputPassword" class="sr-only">Password</label>
+                    <input type="password" id="loginInputPassword" class="form-control" placeholder="Password" required>
+                    <button class="btn btn-lg btn-success btn-block">Sign in</button>
+                </form>
+
+            </div>
+        </div>
+
+        <div id="dashboard" class="hidden">
+            <h1 class="page-header">Dashboard</h1>
+
+            <div class="row">
+                <h2 class="col-xs-1">State: </h2>
+                <div class="col-xs-11" style="margin-left: -60px;">
+                    <div class="onoffswitch">
+                        <input type="checkbox" name="onoffswitch" class="onoffswitch-checkbox" id="dashboardOnOffFirewallSwitch" disabled>
+                        <label class="onoffswitch-label" for="dashboardOnOffFirewallSwitch">
+                            <span class="onoffswitch-inner"></span>
+                            <span class="onoffswitch-switch"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <h2>Mode: <small id="dashboardModeHeader"></small></h2>
+
+            <div class="table-responsive" style="margin-top: 100px;">
+                <h2 class="sub-header">Events Table</h2>
+                <table class="table table-striped" id="dashboardEventsTable">
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Event</th>
+                        <th>Source IP</th>
+                        <th>Source Port</th>
+                        <th>Destination IP</th>
+                        <th>Destination Port</th>
+                        <th>Country</th>
+                        <th>Time</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="row" style="margin-top: 100px;">
+                <h2 class="sub-header">Statistics</h2>
+                <div class="col-xs-3">
+                    <canvas id="blocksAndAllowsPerMonth" width="400" height="400"></canvas>
+                    <h4>Blocks And Allows Per Month</h4>
+                    <span class="text-muted">Allows in blue<br>Blocks in gray</span>
+                </div>
+                <div class="col-xs-3">
+                    <canvas id="blocksPerSessionByInterval" width="400" height="400"></canvas>
+                    <h4>Blocks Per Session By Time Interval</h4>
+                    <span class="text-muted">Allow in blue<br>Blocks in gray</span>
+                </div>
+                <div class="col-xs-3">
+                    <canvas id="blocksPerProtocol" width="400" height="400"></canvas>
+                    <h4>Blocks Per Protocol</h4>
+                    <span class="text-muted">Details</span>
+                </div>
+                <div class="col-xs-3">
+                    <canvas id="sessionsPerDirection" width="400" height="400"></canvas>
+                    <h4>Sessions Per Direction</h4>
+                    <span class="text-muted">Details</span>
+                </div>
+            </div>
+
+            <div class="row" style="margin-top: 100px;">
+                <h2 class="sub-header">Logger</h2>
+                <textarea id="dashboardEventslogger" class="col-xs-12" disabled>
+                </textarea>
+                <button type="button" class="btn btn-primary btn-block" style="height:50px;" id="loggerClearButton">Clear Log</button>
+            </div>
+        </div>
+
+        <div id="settings" class="hidden">
+            <div>
+                <div class="row">
+                    <h2 class="col-xs-1">State: </h2>
+                    <div class="col-xs-11" style="margin-left: -60px;">
+                        <div class="onoffswitch">
+                            <input type="checkbox" name="onoffswitch" class="onoffswitch-checkbox" id="settingsOnOffFirewallSwitch">
+                            <label class="onoffswitch-label" for="settingsOnOffFirewallSwitch">
+                                <span class="onoffswitch-inner"></span>
+                                <span class="onoffswitch-switch"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <h2>Mode: <small id="settingsModeHeader"></small></h2>
+               <div class="dropdown">
+                   <button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                       Change Mode
+                       <span class="caret"></span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-toggle" aria-labelledby="dropdownMenu1" id="setFirewallMode">
+                        <li><a href="#">WhiteList</a></li>
+                        <li><a href="#">BlackList</a></li>
+                        <li><a href="#">PassThrough</a></li>
+                    </ul>
+                </div>
+
+                <h2 class="page-header" id="settingsTableRulesHeader">Table Rules</h2>
+
+                <div class="table-responsive">
+                    <table class="table table-striped" id="settingsTableRules">
+                        <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Action</th>
+                            <th>Direction</th>
+                            <th>Source IP</th>
+                            <th>Source Port</th>
+                            <th>Destination IP</th>
+                            <th>Destination Port</th>
+                            <th>Protocol</th>
+                            <th>Edit</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </section>
+
+    <section id="templates">
+
+        <div id="loadingModal" class="modal fade" data-backdrop="static" data-keyboard="false" tabindex="-1" role="dialog" aria-hidden="true" style="padding-top:15%; overflow-y:visible;">
+            <div class="modal-dialog modal-m">
+                <div class="modal-content">
+                    <div class="modal-header"><h3 style="margin:0;">Loading...</h3></div>
+                    <div class="modal-body">
+                        <div class="progress progress-striped active" style="margin-bottom:0;">
+                            <div class="progress-bar progress-bar-warning" style="width: 100%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="errorModal" class="modal fade" data-backdrop="static" data-keyboard="false" tabindex="-1" role="dialog" aria-hidden="true" style="padding-top:15%; overflow-y:visible;">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                    <div class="modal-header"><h3 style="margin:0;">Error</h3></div>
+                        <div class="modal-body">
+                            <span id="errorMsg"></span><br>
+                            <button class="btn btn-success center-block">OK</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="editRuleModal" class="modal fade" data-backdrop="static" data-keyboard="false" tabindex="-1" role="dialog" aria-hidden="true" style="padding-top:15%; overflow-y:visible;">
+            <div class="modal-dialog modal-m">
+                <div class="modal-content">
+                    <div class="modal-header"><h3 style="margin:0;">Edit Rule</h3></div>
+                        <div class="modal-body">
+                            <table class="table table-striped">
+                                <tr>
+                                    <th>Field</th>
+                                    <th>Old Values</th>
+                                    <th>New Values</th>
+                                </tr>
+                                <tr>
+                                    <td>Direction</td>
+                                    <td><span id="editRuleOldDirection"></span></td>
+                                    <td>
+                                        <select id='editRuleNewDirection'>
+                                            <option value='incoming'>Incoming</option>
+                                            <option value='outgoing'>Outgoing</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Source IP</td>
+                                    <td><span id="editRuleOldSourceIp"></span></td>
+                                    <td><input type="text" id="editRuleNewSourceIp" placeholder='Source IP'></td>
+                                </tr>
+                                <tr>
+                                    <td>Source Port</td>
+                                    <td><span id="editRuleOldSourcePort"></span></td>
+                                    <td><input type='number' min='0' id='editRuleNewSourcePort' placeholder='Source Port'></td>
+                                </tr>
+                                <tr>
+                                    <td>Destination IP</td>
+                                    <td><span id="editRuleOldDestinationIp"></span></td>
+                                    <td><input type="text" id="editRuleNewDestinationIp" placeholder='Destination IP'></td>
+                                </tr>
+                                <tr>
+                                    <td>Destination Port</td>
+                                    <td><span id="editRuleOldDestinationPort"></span></td>
+                                    <td><input type='number' min='0' id='editRuleNewDestinationPort' placeholder='Destination Port'></td>
+                                </tr>
+                                <tr>
+                                    <td>Protocol</td>
+                                    <td><span id="editRuleOldProtocol"></span></td>
+                                    <td><select id='editRuleNewProtocol'></select></td>
+                                </tr>
+                            </table>
+                            <div class="text-center">
+                                <span id="editRuleError" style="color: red;"></span><br>
+                            </div>
+                            <div align="center">
+                                <button class="btn btn-success" id="editConfirmationButton">Edit</button>
+                                <button class="btn" id="editCloseButton">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+
+    <!-- handlebars JS -->
+    <!--<script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/3.0.3/handlebars.amd.js" />-->
+
+    <!-- Bootstarp JS -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+    <!-- Chart JS -->
+    <script src="static/js/Chart.js"></script>
+    <!-- Masked JS -->
+    <script src="static/js/jquery.maskedinput.js"></script>
+    <!-- Socket.io JS -->
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/0.9.16/socket.io.min.js"></script>
+    <!-- CloudFirewall JS -->
+    <script src="static/js/script.js"></script>
+</body>
+</html>
