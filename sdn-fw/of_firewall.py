@@ -1,4 +1,5 @@
 from enum import Enum
+import pickle
 import pox
 import pox.log
 import pox.core
@@ -32,6 +33,25 @@ class Direction(Enum):
 	Outgoing = 'Outgoing'
 
 
+class Action(Enum):
+	Blocked = 'Block'
+	Allowed = 'Allowed'
+
+
+class Event(utils.Container):
+	def __init__(self, **kwargs):
+		self.direction = None
+		self.src_ip = None
+		self.dst_ip = None
+		self.protocol = None
+		self.src_port = None
+		self.dst_port = None
+		self.action = None
+		self.time = None
+
+		self._set_attributes(**kwargs)
+
+
 class Rule(utils.Container):
 	def __init__(self, **kwargs):
 		self.direction = None
@@ -59,36 +79,36 @@ class Rule(utils.Container):
 			source_ip_start, source_ip_end = self.src_ip.replace(' ', '').split('-')
 		else:
 			source_ip_start, source_ip_end = self.src_ip, self.src_ip
-			
+
 		if not source_ip_start <= source_ip <= source_ip_end and source_ip_start != '*':
 			return False
-		
+
 		# Source IP
 		if '-' in self.dst_ip:
 			dest_ip_start, dest_ip_end = self.dst_ip.replace(' ', '').split('-')
 		else:
 			dest_ip_start, dest_ip_end = self.dst_ip, self.dst_ip
-			
+
 		if not dest_ip_start <= dest_ip <= dest_ip_end and dest_ip_start != '*':
 			return False
-		
+
 		# Source port
 		if isinstance(self.src_port, str) and '-' in self.src_port:
 			src_port_start, source_port_end = self.src_port.replace(' ', '').split('-')
 			src_port_start, source_port_end = int(src_port_start), int(source_port_end)
 		else:
 			src_port_start, source_port_end = self.src_port, self.src_port
-			
+
 		if not src_port_start <= src_port <= source_port_end and src_port_start != '*':
 			return False
-		
+
 		# Destination port
 		if isinstance(self.dst_port, str) and '-' in self.dst_port:
 			dst_port_start, source_port_end = self.dst_port.replace(' ', '').split('-')
 			dst_port_start, source_port_end = int(self.dst_port), int(self.dst_port)
 		else:
 			dst_port_start, source_port_end = self.dst_port, self.dst_port
-			
+
 		if not dst_port_start <= dst_port <= source_port_end and dst_port_start != '*':
 			return False
 
@@ -99,6 +119,7 @@ class Firewall(OpenFlowController):
 	__metaclass__ = utils.Singleton
 
 	CONFIG_FILE_PATH = 'config.yaml'
+	EVENTS_FILE = 'events.bin'
 
 	def __init__(self):
 		super(Firewall, self).__init__()
@@ -109,7 +130,65 @@ class Firewall(OpenFlowController):
 		self._firewall_dpid = None
 		self._blacklist_rules = None
 		self._whitelist_rules = None
-		self._read_configuration()
+		self._load_configuration()
+		self._events = self._load_events()
+
+	def set_mode(self, new_mode):
+		self._mode = new_mode
+		self._dump_configuration()
+		self._switches[self._firewall_dpid].remove_flow_mod()
+
+	def add_rule(self, rule):
+		if self._mode == Mode.PassThrough:
+			raise ValueError("Can't edit rules while in passthrough mode")
+
+		if self._mode == Mode.BlackList:
+			self._blacklist_rules.add(rule)
+
+		if self._mode == Mode.WhiteList:
+			self._whitelist_rules.add(rule)
+
+		self._dump_configuration()
+		self._switches[self._firewall_dpid].remove_flow_mod()
+
+	def remove_rule(self, rule_number):
+		if self._mode == Mode.PassThrough:
+			raise ValueError("Can't edit rules while in passthrough mode")
+
+		if self._mode == Mode.BlackList:
+			if len(self._blacklist_rules) - 1 < rule_number:
+				raise ValueError('Rule not found in rules list')
+			self._blacklist_rules.pop(rule_number)
+
+		if self._mode == Mode.WhiteList:
+			if len(self._whitelist_rules) - 1 < rule_number:
+				raise ValueError('Rule not found in rules list')
+			self._whitelist_rules.pop(rule_number)
+
+		self._dump_configuration()
+		self._switches[self._firewall_dpid].remove_flow_mod()
+
+	def edit_rule(self, rule_number, rule):
+		if self._mode == Mode.PassThrough:
+			raise ValueError("Can't edit rules while in passthrough mode")
+
+		if self._mode == Mode.BlackList:
+			if len(self._blacklist_rules) - 1 < rule_number:
+				raise ValueError('Rule not found in rules list')
+			self._blacklist_rules.pop(rule_number)
+			self._blacklist_rules.add(rule)
+
+		if self._mode == Mode.WhiteList:
+			if len(self._whitelist_rules) - 1 < rule_number:
+				raise ValueError('Rule not found in rules list')
+			self._whitelist_rules.pop(rule_number)
+			self._whitelist_rules.add(rule)
+
+		self._dump_configuration()
+		self._switches[self._firewall_dpid].remove_flow_mod()
+
+	def get_events(self, start_time, end_time):
+		return [event for event in self._events if event]
 
 	def _handle_packet(self, event):
 		# Ignore events that are related to other switches in the network.
@@ -169,7 +248,7 @@ class Firewall(OpenFlowController):
 		elif self._mode == Mode.WhiteList:
 			return filter(matches_packet, self._whitelist_rules) != []
 
-	def _read_configuration(self):
+	def _load_configuration(self):
 		config = utils.load_yaml(self.CONFIG_FILE_PATH)
 		self._incoming_port = config['physical_ports']['incoming']
 		self._outgoing_port = config['physical_ports']['outgoing']
@@ -179,7 +258,7 @@ class Firewall(OpenFlowController):
 		self._blacklist_rules = [Rule(**rule_dict) for rule_dict in config['blacklist_rules']]
 		self._whitelist_rules = [Rule(**rule_dict) for rule_dict in config['whitelist_rules']]
 
-	def _write_configuration(self):
+	def _dump_configuration(self):
 		config = {
 			'physical_ports': {
 				'incoming': self._incoming_port,
@@ -193,6 +272,26 @@ class Firewall(OpenFlowController):
 		}
 
 		utils.dump_yaml(self.CONFIG_FILE_PATH, config)
+
+	def _load_events(self):
+		try:
+			with open(self.EVENTS_FILE ,'r') as f:
+				return pickle.loads(f.read())
+		except:
+			return []
+
+	@property
+	def mode(self):
+		return self._mode
+
+	@property
+	def active_rules(self):
+		if self._mode == Mode.BlackList:
+			return self._blacklist_rules
+		if self._mode == Mode.WhiteList:
+			return self._whitelist_rules
+		if self._mode == Mode.PassThrough:
+			return []
 
 
 def init_logger():
@@ -225,8 +324,3 @@ def launch():
 
 	# Register instances of the specific DataCenterController and Discovery to POX's core.
 	core.registerNew(Firewall)
-
-
-if __name__ == '__main__':
-	rule = Rule(direction='Incoming', src_ip='1.1.1.1-1.1.1.1', dst_ip='2.2.2.2', protocol='TCP', src_port=80, dst_port=81)
-	print rule.matches(Direction.Incoming, '1.1.1.1', '2.2.2.2', Protocol.TCP, 80, 81)
