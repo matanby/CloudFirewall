@@ -1,13 +1,10 @@
 from flask import Flask, send_from_directory, make_response, jsonify, request
 from flask.ext.login import LoginManager, current_user, login_user, login_required, logout_user
-# from flask.ext.sqlalchemy import SQLAlchemy
 from models import User
 from forms import LoginForm
-from firewall import Firewall
 from flask.ext.socketio import SocketIO
 
 import wtforms_json
-import json
 import datetime
 
 BLOCK_EVENT_TYPE = "Block"
@@ -16,7 +13,9 @@ BLOCKS = "blocks"
 EVENT_TYPE = "type"
 SESSIONS = "sessions"
 DATASETS = "datasets"
-PROTOCOLS_BY_PORT = { # TODO: fill with key and values
+
+# TODO: fill with key and values
+PROTOCOLS_BY_PORT = {
 
 }
 
@@ -93,7 +92,7 @@ def login():
 	if form.validate():
 		# Login and validate the user.
 		login_user(admin)
-		admin.set_authneticated(True)
+		admin.set_authenticated(True)
 		events_updater()
 		return success('User logged in successfully', 200)
 
@@ -106,7 +105,7 @@ def logout():
 	Handles users logout requests.
 	"""
 	logout_user()
-	admin.set_authneticated(False)
+	admin.set_authenticated(False)
 	return success('User logged out successfully', 200)
 
 @app.route('/events', methods=['GET'])
@@ -219,7 +218,7 @@ def get_blocks_and_allows_stats():
 			"allows": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			"blocks": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 		}
-    };
+	};
 
 	for event in firewall.get_events():
 		month = int(event["time"].split(" ")[0].split("\\")[1]) - 1 # Parse the month number out of the event log string
@@ -292,7 +291,7 @@ def get_sessions_per_direction():
 		pieChartData = {
 			"incoming": 0,
 			"outgoing": 0
-		};
+		}
 
 		for event in firewall.get_events():
 			if (is_in_time_interval(event["time"], 5)):

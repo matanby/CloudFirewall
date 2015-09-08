@@ -1,28 +1,29 @@
-from wtforms import StringField, PasswordField, validators
+from wtforms import StringField, validators
 
 
-class User():
-    """
-    Represent user in the system
-    """
-    username = StringField('Username', [validators.DataRequired()])
+class User(object):
+	"""
+	Represent a system user.
+	"""
 
-    def __init__(self, username):
-        self.username = username
-        self.authenticated = False
+	username = StringField('Username', [validators.DataRequired()])
 
-    def is_authenticated(self):
-        return self.authenticated
+	def __init__(self, username):
+		self.username = username
+		self.authenticated = False
 
-    def set_authneticated(self, authenticated):
-        self.authenticated = authenticated
+	def is_authenticated(self):
+		return self.authenticated
 
-    def is_active(self):
-        return True
+	def set_authenticated(self, authenticated):
+		self.authenticated = authenticated
 
-    def is_anonymous(self):
-        return False
+	def is_active(self):
+		return True
 
-    def get_id(self):
-        return unicode(self.username)
+	def is_anonymous(self):
+		return False
+
+	def get_id(self):
+		return unicode(self.username)
 
