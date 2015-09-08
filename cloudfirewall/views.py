@@ -1,24 +1,21 @@
 from flask import Flask, send_from_directory, make_response, jsonify, request
 from flask.ext.login import LoginManager, current_user, login_user, login_required, logout_user
-# from flask.ext.sqlalchemy import SQLAlchemy
 from models import User
 from forms import LoginForm
-from firewall import Firewall
-from flask.ext.socketio import SocketIO
+# from flask.ext.socketio import SocketIO
 
 import wtforms_json
-import json
 import datetime
+import time
 
-BLOCK_EVENT_TYPE = "Block"
+BLOCKED_EVENT_TYPE = "Blocked"
 EVENT_TIME = "time"
 BLOCKS = "blocks"
-EVENT_TYPE = "type"
+EVENT_TYPE = "action"
 SESSIONS = "sessions"
 DATASETS = "datasets"
-PROTOCOLS_BY_PORT = { # TODO: fill with key and values
+PROTOCOLS_FILE = "protocols.txt"
 
-}
 
 app = Flask(__name__, static_folder='static')
 app.debug = True
@@ -29,7 +26,7 @@ app.config.from_object('config')
 wtforms_json.init()
 
 # Init web sockets framework
-socketio = SocketIO(app)
+# socketio = SocketIO(app)
 
 # Init the login manager and the admin user
 login_manager = LoginManager()
@@ -37,8 +34,9 @@ login_manager.init_app(app)
 admin = User("admin")
 
 # Init the firewall instance
-firewall = Firewall()
-
+# firewall = ipc.get_proxy_by_name("firewall")
+import xmlrpclib
+firewall = xmlrpclib.ServerProxy('http://192.168.1.2:9000')
 
 def success(text, code=200, data=None):
 	return make_response(jsonify(success=True, data=data or {}, status=text, code=code), code)
@@ -116,7 +114,10 @@ def events_table():
 
 	"""
 	try:
-		return success('Events table retrieved succesfuly', 200, firewall.get_events())
+		events = firewall.get_events(time.time() - 60*30, time.time())
+		for event in events:
+			event["time"] = time.ctime(event["time"])
+		return success('Events table retrieved succesfuly', 200, events)
 	except:
 		return fail('Could not retrieve events table')
 
@@ -127,9 +128,10 @@ def get_mode():
 
 	"""
 	try:
-		mode = Firewall.mode_to_string(firewall.get_mode())
+		mode = firewall.get_mode()
 		return success('Firewall Mode retrieved succesfuly', 200, mode)
-	except:
+	except Exception,e:
+		print e
 		return fail('Could not retrieve firewall mode')
 
 @app.route('/mode', methods=['POST'])
@@ -140,9 +142,10 @@ def set_mode():
 	"""
 	try:
 		mode = request.get_json()['mode']
-		firewall.set_mode(Firewall.string_to_mode(mode))
+		firewall.set_mode(mode)
 		return success('Firewall Mode retrieved succesfuly', 200, mode)
-	except:
+	except Exception, e:
+		print e
 		return fail('Could not change firewall mode')
 
 @app.route('/rules', methods=['GET'])
@@ -152,62 +155,52 @@ def rules_table():
 
 	"""
 	try:
-		return success('Rules table retrieved succesfuly', 200, firewall.get_rules())
+		return success('Rules table retrieved succesfuly', 200, firewall.get_active_rules())
 	except:
 		return fail('Could not retrieve firewall rules table')
 
 @app.route('/rules', methods=['POST'])
 @login_required
 def add_rule():
-	rule = request.get_json()
-	if(firewall.add_rule(rule['direction'], rule['sourceIp'], rule['sourcePort'],
-						 rule['destinationIp'], rule['destinationPort'], rule['protocol'])):
+	try:
+		rule = request.get_json()
+		firewall.add_rule(rule['direction'], rule['sourceIp'], rule['destinationIp'],
+							 rule['protocol'] , rule['sourcePort'], rule['destinationPort'])
 		return success('New Rule added succesfuly', 200, rule)
-	else:
+	except:
 		return fail('Cannot add rule to firewall')
 
 @app.route('/rules', methods=['PUT'])
 @login_required
 def edit_rule():
-	rule = request.get_json()
-	old_rule = {"direction": rule['oldDirection'], "sourceIp": rule['oldSourceIp'], "sourcePort": rule['oldSourcePort'],
-				"destinationIp": rule['oldDestinationIp'], "destinationPort": rule['oldDestinationPort'], "protocol": rule['oldProtocol']}
-	new_rule = {"direction": rule['newDirection'], "sourceIp": rule['newSourceIp'], "sourcePort": rule['newSourcePort'],
-				"destinationIp": rule['newDestinationIp'], "destinationPort": rule['newDestinationPort'], "protocol": rule['newProtocol']}
 	try:
-		firewall.edit_rule(old_rule, new_rule)
+		rule = request.get_json()
+		firewall.edit_rule(int(rule['id']) - 1, rule['newDirection'], rule['newSourceIp'], rule['newDestinationIp'],
+							rule['newProtocol'], rule['newSourcePort'],rule['newDestinationPort'])
+
 		return success('Rule data changed successfully', 200, rule)
 	except:
 		return fail('Could not edit rule')
 
-@app.route('/protocols', methods=['GET'])
-@login_required
-def get_protocols():
-	protocols = []
-	for protocol in firewall.get_supported_protocols():
-		protocols.append(Firewall.protocol_to_string(protocol))
-
-	return success('Protocols list retrieved succesfuly', 200, protocols)
-
 @app.route('/rules', methods=['DELETE'])
 @login_required
 def delete_rule():
-	rule = request.get_json()
-	if(firewall.delete_rule(rule)):
+	try:
+		rule = request.get_json()
+		firewall.delete_rule(rule["id"] - 1)
 		return success('Rule deleted succesfuly', 200, rule)
-	else:
+	except:
 		return fail('Could not delete the rule from firewall')
 
-@socketio.on('get_events')
-@login_required
-def handle_message():
-	print "user connected to get events socket"
+# @socketio.on('get_events')
+# @login_required
+# def handle_message():
+# 	print "user connected to get events socket"
 
 def events_updater():
 	import threading
 	threading.Timer(50000.0, events_updater).start()
-	current_events = firewall.get_events()
-	socketio.emit('event_occured', firewall.get_events())
+	# socketio.emit('event_occured', firewall.get_events())
 	print "data sent."
 
 @app.route('/BlocksAndAllowsStats', methods=['GET'])
@@ -222,14 +215,6 @@ def get_blocks_and_allows_stats():
 		}
     };
 
-	for event in firewall.get_events():
-		month = int(event["time"].split(" ")[0].split("\\")[1]) - 1 # Parse the month number out of the event log string
-		type = event["type"]
-		if type == "Allow":
-			lineChartData["datasets"]["allows"][month] += 1
-		elif type == "Block":
-			lineChartData["datasets"]["blocks"][month] += 1
-
 	return success('Stats table retrieved succesfuly', 200, lineChartData)
 
 	# TODO: return failure in the relveant cases
@@ -238,6 +223,7 @@ def get_blocks_and_allows_stats():
 @login_required
 def get_blocks_per_session_by_interval():
 	try:
+
 		barChartData = {
 			"labels": ["10 mins ago", "9 mins ago", "8 mins ago", "7 mins ago", "6 mins ago", "5 mins ago",
 					   "4 mins ago", "3 mins ago", "2 mins ago", "1 mins ago"],
@@ -247,15 +233,15 @@ def get_blocks_per_session_by_interval():
 			}
 		};
 
-		last_10_mins_events = [event for event in firewall.get_events() if is_in_time_interval(event["time"], 10)]
+		last_10_mins_events = firewall.get_events(time.time() - 10*60, time.time())
 
 		for event in last_10_mins_events:
-			event_time_mins = int(event["time"].split(" ")[1].split(":")[1])
-			ten_mins_ago_time = datetime.datetime.now() - datetime.timedelta(minutes=10)
-			time_interval = event_time_mins - ten_mins_ago_time.minute
+			event_time_mins = int(event["time"]) / 60
+			ten_mins_ago_time = time.time() - 10*60
+			time_interval = event_time_mins - (int(ten_mins_ago_time) / 60)
 			barChartData[DATASETS][SESSIONS][time_interval] += 1
 
-			if event[EVENT_TYPE] == BLOCK_EVENT_TYPE:
+			if event[EVENT_TYPE] == BLOCKED_EVENT_TYPE:
 				barChartData[DATASETS][BLOCKS][time_interval] += 1
 
 		return success('Stats table retrieved succesfuly', 200, barChartData)
@@ -265,21 +251,23 @@ def get_blocks_per_session_by_interval():
 
 @app.route('/ProtocolStats', methods=['GET'])
 @login_required
-def get_blocks_per_protocol():
+def get_sessions_per_protocol():
 
 	try:
-		pieChartData = {}
-		for protocol in PROTOCOLS_BY_PORT:
-			pieChartData[protocol] = 0
-		# pieChartData = {
-		# 	"HTTP": 0,
-		# 	"TCP": 0,
-		# 	"UDP": 0
-		# };
 
-		for event in firewall.get_events():
-			if (is_in_time_interval(event["time"], 5)):
-				pieChartData[event["destinationPort"]] += 1 # TODO: test after PROTOCOLS_BY_PORT dictionary is filled
+		pieChartData = {}
+
+		for event in firewall.get_events(time.time() - 10*60, time.time()):
+			dst_port = event["dst_port"]
+			if dst_port in PROTOCOLS_BY_PORT:
+				protocol = PROTOCOLS_BY_PORT[dst_port] + " (%s)" % dst_port
+			else:
+				protocol = str(dst_port)
+
+			if protocol not in pieChartData:
+				pieChartData[protocol] = 1
+			else:
+				pieChartData[protocol] += 1
 
 		return success('Stats table retrieved successfully', 200, pieChartData)
 	except:
@@ -291,25 +279,36 @@ def get_sessions_per_direction():
 
 	try:
 		pieChartData = {
-			"incoming": 0,
-			"outgoing": 0
+			"Incoming": 0,
+			"Outgoing": 0
 		};
 
-		for event in firewall.get_events():
-			if (is_in_time_interval(event["time"], 5)):
-				pieChartData[event["direction"]] += 1
+		for event in firewall.get_events(time.time() - 60*10, time.time()):
+			pieChartData[event["direction"]] += 1
 
 		return success('Stats table retrieved successfully', 200, pieChartData)
 
 	except:
 		return fail('Could not retrieve sessions per direction stats')
 
+def read_protocols():
+	prots = {}
+	with open(PROTOCOLS_FILE, 'r') as f:
+		for line in f.readlines():
+			fields = line.split('\t')
+			prot_no = int(fields[0].strip())
+			proto_name = fields[1].strip()
+			proto_desc = fields[2].strip()
+			prots[prot_no] = proto_name
 
-def is_in_time_interval(check_time_str, interval):
-	time_interval = datetime.datetime.now() - datetime.timedelta(minutes=interval)
-	check_time = datetime.datetime.strptime(check_time_str, "%d\%m\%Y %H:%M:%S")
-	return (check_time > time_interval)
+	return prots
+
+
+
+
 
 if __name__ == '__main__':
-	# app.run()
-	socketio.run(app)
+	PROTOCOLS_BY_PORT = read_protocols()
+	app.run()
+	# socketio.run(app)
+	pass

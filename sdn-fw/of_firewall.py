@@ -1,3 +1,5 @@
+from SimpleXMLRPCServer import SimpleXMLRPCServer
+import threading
 from enum import Enum
 import pickle
 import pox
@@ -26,6 +28,7 @@ class Protocol(Enum):
 	ICMP = 'ICMP'
 	TCP = 'TCP'
 	UDP = 'UDP'
+	TCP_UDP = 'TCP/UDP'
 
 
 class Direction(Enum):
@@ -34,7 +37,7 @@ class Direction(Enum):
 
 
 class Action(Enum):
-	Blocked = 'Block'
+	Blocked = 'Blocked'
 	Allowed = 'Allowed'
 
 
@@ -51,6 +54,18 @@ class Event(utils.Container):
 
 		self._set_attributes(**kwargs)
 
+	def as_dict(self):
+		return {
+			'direction': self.direction.value,
+			'src_ip': self.src_ip,
+			'dst_ip': self.dst_ip,
+			'protocol': self.protocol.value,
+			'src_port': self.src_port,
+			'dst_port': self.dst_port,
+			'action': self.action.value,
+			'time': self.time,
+		}
+
 
 class Rule(utils.Container):
 	def __init__(self, **kwargs):
@@ -64,6 +79,16 @@ class Rule(utils.Container):
 		self._set_attributes(**kwargs)
 		self.direction = Direction(self.direction)
 		self.protocol = Protocol(self.protocol)
+
+	def as_dict(self):
+		return {
+			'direction': self.direction.value,
+			'src_ip': self.src_ip,
+			'dst_ip': self.dst_ip,
+			'protocol': self.protocol.value,
+			'src_port': self.src_port,
+			'dst_port': self.dst_port
+		}
 
 	def matches(self, direction, source_ip, dest_ip, protocol, src_port, dst_port):
 		# Direction
@@ -122,7 +147,6 @@ class Firewall(OpenFlowController):
 	EVENTS_FILE = 'events.bin'
 
 	def __init__(self):
-		super(Firewall, self).__init__()
 		self._incoming_port = None
 		self._outgoing_port = None
 		self._mode = None
@@ -132,24 +156,29 @@ class Firewall(OpenFlowController):
 		self._whitelist_rules = None
 		self._load_configuration()
 		self._events = self._load_events()
+		super(Firewall, self).__init__()
 
 	def set_mode(self, new_mode):
 		self._mode = new_mode
 		self._dump_configuration()
-		self._switches[self._firewall_dpid].remove_flow_mod()
+		self._remove_all_flow_records()
+
+	def _remove_all_flow_records(self):
+		if self._firewall_dpid in self._switches:
+			self._switches[self._firewall_dpid].remove_flow_mod()
 
 	def add_rule(self, rule):
 		if self._mode == Mode.PassThrough:
 			raise ValueError("Can't edit rules while in passthrough mode")
 
 		if self._mode == Mode.BlackList:
-			self._blacklist_rules.add(rule)
+			self._blacklist_rules.append(rule)
 
 		if self._mode == Mode.WhiteList:
-			self._whitelist_rules.add(rule)
+			self._whitelist_rules.append(rule)
 
 		self._dump_configuration()
-		self._switches[self._firewall_dpid].remove_flow_mod()
+		self._remove_all_flow_records()
 
 	def remove_rule(self, rule_number):
 		if self._mode == Mode.PassThrough:
@@ -166,7 +195,7 @@ class Firewall(OpenFlowController):
 			self._whitelist_rules.pop(rule_number)
 
 		self._dump_configuration()
-		self._switches[self._firewall_dpid].remove_flow_mod()
+		self._remove_all_flow_records()
 
 	def edit_rule(self, rule_number, rule):
 		if self._mode == Mode.PassThrough:
@@ -176,19 +205,19 @@ class Firewall(OpenFlowController):
 			if len(self._blacklist_rules) - 1 < rule_number:
 				raise ValueError('Rule not found in rules list')
 			self._blacklist_rules.pop(rule_number)
-			self._blacklist_rules.add(rule)
+			self._blacklist_rules.append(rule)
 
 		if self._mode == Mode.WhiteList:
 			if len(self._whitelist_rules) - 1 < rule_number:
 				raise ValueError('Rule not found in rules list')
 			self._whitelist_rules.pop(rule_number)
-			self._whitelist_rules.add(rule)
+			self._whitelist_rules.append(rule)
 
 		self._dump_configuration()
-		self._switches[self._firewall_dpid].remove_flow_mod()
+		self._remove_all_flow_records()
 
 	def get_events(self, start_time, end_time):
-		return [event for event in self._events if event]
+		return [event.as_dict() for event in self._events if start_time <= event.time <= end_time]
 
 	def _handle_packet(self, event):
 		# Ignore events that are related to other switches in the network.
@@ -275,7 +304,7 @@ class Firewall(OpenFlowController):
 
 	def _load_events(self):
 		try:
-			with open(self.EVENTS_FILE ,'r') as f:
+			with open(self.EVENTS_FILE, 'r') as f:
 				return pickle.loads(f.read())
 		except:
 			return []
@@ -318,9 +347,7 @@ def launch():
 	"""
 
 	init_logger()
-	ipc.init()
-	ipc.start_request_loop()
-	ipc.register_service(interface.FirewallInterface(), 'firewall')
-
 	# Register instances of the specific DataCenterController and Discovery to POX's core.
 	core.registerNew(Firewall)
+	interface.FirewallInterface().start_serve_loop()
+

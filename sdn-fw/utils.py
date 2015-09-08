@@ -1,4 +1,4 @@
-from gevent.lock import RLock
+from threading import RLock
 import yaml
 
 
@@ -59,11 +59,5 @@ def load_yaml(file_name):
 
 
 def dump_yaml(file_name, data):
-	class FlatListDumper(yaml.Dumper):
-		""" A helper Dumper object that will make sure the YAML files have flat lists """
-
-		def represent_sequence(self, tag, sequence, flow_style=None):
-			return yaml.Dumper.represent_sequence(self, tag, sequence, flow_style=True)
-
 	with open(file_name, 'w') as conf_file:
-		return yaml.dump(data, conf_file, default_flow_style=False, indent=4, Dumper=FlatListDumper)
+		return yaml.dump(data, conf_file, default_flow_style=False, indent=4)

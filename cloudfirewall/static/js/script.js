@@ -128,7 +128,7 @@ appLogic = {
                 appUi.render.dashboardEventsTable(response.data)
             },
             error: function (response){
-
+                appUi.showError(JSON.parse(response.responseText).status)
             }
         });
     },
@@ -365,6 +365,7 @@ appLogic = {
             type: "PUT",
             contentType: 'application/json',
             data: JSON.stringify({
+                id: $("#editRuleId").text(),
                 oldDirection: $("#editRuleOldDirection").text(),
                 oldSourceIp: $("#editRuleOldSourceIp").text(),
                 oldSourcePort: $("#editRuleOldSourcePort").text(),
@@ -394,18 +395,13 @@ appLogic = {
     },
 
     deleteRule: function(){
+        appUi.showLoader()
         $.ajax({
             url: "/rules",
             type: "DELETE",
             contentType: 'application/json',
             data: JSON.stringify({
                 id: parseInt(event.currentTarget.parentElement.previousElementSibling.textContent),
-                direction: event.currentTarget.parentElement.nextElementSibling.textContent,
-                sourceIp: event.currentTarget.parentElement.nextElementSibling.nextElementSibling.textContent,
-                sourcePort: event.currentTarget.parentElement.nextElementSibling.nextElementSibling.nextElementSibling.textContent,
-                destinationIp: event.currentTarget.parentElement.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.textContent,
-                destinationPort: event.currentTarget.parentElement.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.textContent,
-                protocol: event.currentTarget.parentElement.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.nextElementSibling.textContent,
             }),
             success: function(response){
                 appLogic.getSettings()
@@ -417,9 +413,11 @@ appLogic = {
                     "Destination Port: " + response.data.destinationPort + ", " +
                     "Protocol: " + response.data.protocol;
                 appLogic.setLog(log)
+                appUi.hideLoader()
             },
             error: function (response){
-
+                appUi.hideLoader()
+                appUi.showError(JSON.parse(response.responseText).status)
             }
         });
     },
@@ -588,6 +586,8 @@ appUi = {
     },
 
     showEditRuleModal: function(direction, sourceIp, sourcePort, destinationIp, destinationPort, protocol){
+        $("#editRuleId").html(event.currentTarget.parentElement.parentElement.getElementsByTagName("td")[0].textContent)
+
         $("#editRuleOldDirection").html(direction);
         $("#editRuleNewDirection").val(direction);
 
@@ -623,6 +623,15 @@ appUi = {
         this.hideSettings();
     },
 
+    getRandomColor: function() {
+        var letters = '0123456789ABCDEF'.split('');
+        var color = '#';
+        for (var i = 0; i < 6; i++ ) {
+            color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+    },
+
     render: {
         firewallMode: function(mode){
             $("#settingsModeHeader").html(mode)
@@ -645,10 +654,10 @@ appUi = {
                             "<td>" + (i+1) + "</td>" +
                             "<td><button type='button' class='btn btn-danger deleteRuleButton'>-</button></td>" +
                             "<td>" + rules[i].direction + "</td>" +
-                            "<td>" + rules[i].sourceIp + "</td>" +
-                            "<td>" + rules[i].sourcePort + "</td>" +
-                            "<td>" + rules[i].destinationIp + "</td>" +
-                            "<td>" + rules[i].destinationPort + "</td>" +
+                            "<td>" + rules[i].src_ip + "</td>" +
+                            "<td>" + rules[i].src_port + "</td>" +
+                            "<td>" + rules[i].dst_ip + "</td>" +
+                            "<td>" + rules[i].dst_port + "</td>" +
                             "<td>" + rules[i].protocol + "</td>" +
                             "<td><button class='glyphicon glyphicon-edit editRuleButton' aria-hidden='true'></button></td>" +
                         "</tr>");
@@ -659,13 +668,13 @@ appUi = {
                             "<td>" + (i+1) + "</td>" +
                             "<td><button type='button' class='btn btn-success' id='addRuleButton'>+</button></td>" +
                             "<td><select id='addRuleDirection'>" +
-                                "<option value='incoming'>Incoming</option>" +
-                                "<option value='outgoing'>Outgoing</option></select></td>" +
+                                "<option value='Incoming'>Incoming</option>" +
+                                "<option value='Outgoing'>Outgoing</option></select></td>" +
                             "<td><input type='text' id='addRuleSourceIp' placeholder='Source IP'></td>" +
                             "<td><input type='number' min='0' id='addRuleSourcePort' placeholder='Source Port'></td>" +
                             "<td><input type='text' id='addRuleDestinationIp' placeholder='Destination IP'></td>" +
                             "<td><input type='number' min='0' id='addRuleDestinationPort' placeholder='Destination Port'></td>" +
-                            "<td><select id='addRuleProtocol'><option value='TCP\\UDP'>TCP\\UDP</option>" +
+                            "<td><select id='addRuleProtocol'><option value='TCP/UDP'>TCP/UDP</option>" +
                                 "<option value='TCP'>TCP<option value='UDP'>UDP</select></td>" +
                         "</tr>");
             //appLogic.getProtocols()
@@ -723,12 +732,11 @@ appUi = {
                     dashboardTableBody.append(
                     "<tr>" +
                         "<td>" + i + "</td>" +
-                        "<td>" + tableData[i].type + "</td>" +
-                        "<td>" + tableData[i].sourceIp + "</td>" +
-                        "<td>" + tableData[i].sourcePort + "</td>" +
-                        "<td>" + tableData[i].destinationIp + "</td>" +
-                        "<td>" + tableData[i].destinationPort + "</td>" +
-                        "<td>" + tableData[i].country + "</td>" +
+                        "<td>" + tableData[i].action + "</td>" +
+                        "<td>" + tableData[i].src_ip + "</td>" +
+                        "<td>" + tableData[i].src_port + "</td>" +
+                        "<td>" + tableData[i].dst_ip + "</td>" +
+                        "<td>" + tableData[i].dst_port + "</td>" +
                         "<td>" + tableData[i].time + "</td>" +
                     "</tr>");
             }
@@ -935,6 +943,7 @@ appUi = {
             var myRadarChart = new Chart(ctx).Radar(data, options);
         },
 
+
         ProtocolPieChart: function(data){
             var options = {
                 //Boolean - Whether we should show a stroke on each segment
@@ -966,26 +975,18 @@ appUi = {
 
             }
             var ctx = $("#blocksPerProtocol").get(0).getContext("2d");
-            var pieChartData = [
-                {
-                    value: data.HTTP,
-                    color:"#F7464A",
-                    highlight: "#FF5A5E",
-                    label: "HTTP"
-                },
-                {
-                    value: data.TCP,
-                    color: "#46BFBD",
-                    highlight: "#5AD3D1",
-                    label: "TCP"
-                },
-                {
-                    value: data.UDP,
-                    color: "#FDB45C",
-                    highlight: "#FFC870",
-                    label: "UDP"
+            var pieChartData = []
+
+            for (protocol in data){
+                color = appUi.getRandomColor();
+                slice = {
+                    value: data[protocol],
+                    color: color, //"#F7464A"
+                    highlight: color,
+                    label: protocol
                 }
-            ]
+                pieChartData.push(slice)
+            }
             var myPieChart = new Chart(ctx).Pie(pieChartData,options);
         },
 
@@ -1020,17 +1021,20 @@ appUi = {
 
             }
             var ctx = $("#sessionsPerDirection").get(0).getContext("2d");
+            incomingColor = appUi.getRandomColor();
+            outgoingColor = appUi.getRandomColor();
+
             var pieChartData = [
                 {
-                    value: data.incoming,
-                    color:"#F7464A",
-                    highlight: "#FF5A5E",
+                    value: data.Incoming,
+                    color:incomingColor,
+                    highlight: incomingColor,
                     label: "Incoming"
                 },
                 {
-                    value: data.outgoing,
-                    color: "#46BFBD",
-                    highlight: "#5AD3D1",
+                    value: data.Outgoing,
+                    color: outgoingColor,
+                    highlight: outgoingColor,
                     label: "Outgoing"
                 }
             ]

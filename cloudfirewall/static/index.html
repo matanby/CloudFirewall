@@ -96,7 +96,6 @@
                         <th>Source Port</th>
                         <th>Destination IP</th>
                         <th>Destination Port</th>
-                        <th>Country</th>
                         <th>Time</th>
                     </tr>
                     </thead>
@@ -188,6 +187,7 @@
                 <div class="modal-content">
                     <div class="modal-header"><h3 style="margin:0;">Edit Rule</h3></div>
                         <div class="modal-body">
+                            <span id="editRuleId" style="display: none;"></span>
                             <table class="table table-striped">
                                 <tr>
                                     <th>Field</th>
@@ -199,8 +199,8 @@
                                     <td><span id="editRuleOldDirection"></span></td>
                                     <td>
                                         <select id='editRuleNewDirection'>
-                                            <option value='incoming'>Incoming</option>
-                                            <option value='outgoing'>Outgoing</option>
+                                            <option value='Incoming'>Incoming</option>
+                                            <option value='Outgoing'>Outgoing</option>
                                         </select>
                                     </td>
                                 </tr>
@@ -228,7 +228,7 @@
                                     <td>Protocol</td>
                                     <td><span id="editRuleOldProtocol"></span></td>
                                     <td><select id='editRuleNewProtocol'>
-                                        <option value='TCP\UDP'>TCP\UDP</option>
+                                        <option value='TCP/UDP'>TCP/UDP</option>
                                         <option value='TCP'>TCP</option>
                                         <option value='UDP'>UDP</option>
                                     </select></td>
