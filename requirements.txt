@@ -1,0 +1,4 @@
+Flask==0.10.1
+Flask-Login==0.2.11
+Flask-SocketIO==0.6.0
+Pyro4==4.39
