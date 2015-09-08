@@ -10,6 +10,8 @@ appLogic = {
     init: function () {
         this.setVars();
         this.setEventListeners();
+        $.mask.definitions['x'] = "[0-2]";
+        $.mask.definitions['y'] = "[0-5]";
     },
 
     setVars: function () {
@@ -100,7 +102,6 @@ appLogic = {
             }),
             success: function(response){
                 appUi.showDashboard();
-                appLogic.getState();
                 appLogic.getMode();
                 appLogic.getEventsTable();
                 appLogic.getStats();
@@ -123,23 +124,6 @@ appLogic = {
             }),
             success: function(response){
                 appUi.render.dashboardEventsTable(response.data)
-            },
-            error: function (response){
-
-            }
-        });
-    },
-
-    getState: function(){
-        $.ajax({
-            url: "/state",
-            type: "GET",
-            contentType: 'application/json',
-            data: JSON.stringify({
-            }),
-            success: function(response){
-                state = JSON.parse(response.data)
-                appUi.render.firewallState(state)
             },
             error: function (response){
 
@@ -291,27 +275,6 @@ appLogic = {
         });
     },
 
-    setState: function(){
-        $.ajax({
-            url: "/state",
-            type: "POST",
-            contentType: 'application/json',
-            data: JSON.stringify({
-                state: $("#settingsOnOffFirewallSwitch").prop("checked")
-            }),
-            success: function(response){
-                appUi.render.firewallState($("#settingsOnOffFirewallSwitch").prop("checked"))
-
-                var state = ($("#settingsOnOffFirewallSwitch").prop("checked") == true) ? "ON" : "OFF";
-                var log = "Firewall state changed to: " + state;
-                appLogic.setLog(log)
-            },
-            error: function (response){
-
-            }
-        });
-    },
-
     setMode: function(){
         $.ajax({
             url: "/mode",
@@ -322,6 +285,7 @@ appLogic = {
             }),
             success: function(response){
                 appUi.render.firewallMode(response.data)
+                appLogic.getRuleTable()
                 var log = "Firewall mode changed to: " + response.data;
                 appLogic.setLog(log)
             },
@@ -349,8 +313,9 @@ appLogic = {
     },
 
     addRule: function(){
-        if(!this.validator.validateAddRuleForm()){
-            appUi.showError("Adding rule fields cannot be left empty")
+        validationResult = this.validator.validateAddRuleForm();
+        if(validationResult !== 1){
+            appUi.showError(validationResult)
             return;
         }
 
@@ -385,8 +350,9 @@ appLogic = {
 
     editRule: function(){
 
-        if(!appLogic.validator.validateEditRuleForm()){
-            $("#editRuleError").html("Fields cannot be left empty!")
+        validation = appLogic.validator.validateEditRuleForm();
+        if(validation !== 1){
+            $("#editRuleError").html(validation)
             return;
         }
 
@@ -488,9 +454,13 @@ appLogic = {
                 $("#addRuleDestinationIp").val().length == 0 ||
                 $("#addRuleDestinationPort").val().length == 0 ||
                 $("#addRuleProtocol").val().length == 0){
-                return false;
+                return "Cannot add new rule with empty fileds";
             }
-            return true;
+            else if ($("#addRuleSourcePort").val() > 65535 || $("#addRuleSourcePort").val() < 0 ||
+                $("#addRuleDestinationPort").val() > 65535 || $("#addRuleDestinationPort").val() < 0){
+                return "Port must be in range 0 - 65535"
+            }
+            return 1;
         },
 
         validateEditRuleForm: function(){
@@ -500,9 +470,13 @@ appLogic = {
                 $("#editRuleNewDestinationIp").val().length == 0 ||
                 $("#editRuleNewDestinationPort").val().length == 0 ||
                 $("#editRuleNewProtocol").val().length == 0){
-                return false;
+                return "Cannot edit rule with empty fileds";
             }
-            return true;
+            else if ($("#editRuleNewSourcePort").val() > 65535 || $("#editRuleNewSourcePort").val() < 0 ||
+                $("#editRuleNewDestinationPort").val() > 65535 || $("#editRuleNewDestinationPort").val() < 0){
+                return "Port must be in range 0 - 65535"
+            }
+            return 1;
         }
     }
 }
@@ -536,7 +510,6 @@ appUi = {
         $("#top_bar .logoutLink").get(0).addEventListener("click", appLogic.logout.bind(appLogic));
         $("#top_bar .settingsLink").get(0).addEventListener("click", appLogic.getSettings.bind(appLogic));
         $("#setFirewallMode").get(0).addEventListener("click", appLogic.setMode.bind(appLogic));
-        $("#settingsOnOffFirewallSwitch").get(0).addEventListener("click", appLogic.setState.bind(appLogic));
         $("#loggerClearButton").get(0).addEventListener("click", appLogic.clearLog.bind(appLogic));
         $("#editConfirmationButton").get(0).addEventListener("click", appLogic.editRule.bind(appLogic));
         $("#editCloseButton").get(0).addEventListener("click", appUi.hideEditRuleModal.bind(appUi));
@@ -624,8 +597,8 @@ appUi = {
         $("#editRuleOldProtocol").html(protocol)
         $("#editRuleNewProtocol").val(protocol)
 
-        $("#editRuleNewSourceIp").mask("999.999.999.999",{placeholder:"xxx.xxx.xxx.xxx"});
-        $("#editRuleNewDestinationIp").mask("999.999.999.999",{placeholder:"xxx.xxx.xxx.xxx"});
+        $("#editRuleNewSourceIp").mask("xyy.xyy.xyy.xyy",{placeholder:"xxx.xxx.xxx.xxx"});
+        $("#editRuleNewDestinationIp").mask("xyy.xyy.xyy.xyy",{placeholder:"xxx.xxx.xxx.xxx"});
 
         this.editRuleModal.modal();
     },
@@ -642,17 +615,6 @@ appUi = {
     },
 
     render: {
-        settings: function(state, mode, rules){
-            this.firewallState(state);
-            this.firewallMode(mode);
-            this.rulesTable(rules);
-        },
-
-        firewallState: function(state){
-            $("#settingsOnOffFirewallSwitch").prop('checked', state);
-            $("#dashboardOnOffFirewallSwitch").prop('checked', state);
-        },
-
         firewallMode: function(mode){
             $("#settingsModeHeader").html(mode)
             $("#dashboardModeHeader").html(mode)
@@ -689,12 +651,12 @@ appUi = {
                             "<td><input type='number' min='0' id='addRuleSourcePort' placeholder='Source Port'></td>" +
                             "<td><input type='text' id='addRuleDestinationIp' placeholder='Destination IP'></td>" +
                             "<td><input type='number' min='0' id='addRuleDestinationPort' placeholder='Destination Port'></td>" +
-                            "<td><select id='addRuleProtocol'></select></td>" +
+                            "<td><select id='addRuleProtocol'><option value='TCP\\UDP'>TCP\\UDP</option>" +
+                                "<option value='TCP'>TCP<option value='UDP'>UDP</select></td>" +
                         "</tr>");
-            appLogic.getProtocols()
-
-            $("#addRuleSourceIp").mask("999.999.999.999",{placeholder:"xxx.xxx.xxx.xxx"});
-            $("#addRuleDestinationIp").mask("999.999.999.999",{placeholder:"xxx.xxx.xxx.xxx"});
+            //appLogic.getProtocols()
+            $("#addRuleSourceIp").mask("xyy.xyy.xyy.xyy",{placeholder:"xxx.xxx.xxx.xxx"});
+            $("#addRuleDestinationIp").mask("xyy.xyy.xyy.xyy",{placeholder:"xxx.xxx.xxx.xxx"});
             $("#addRuleButton").get(0).addEventListener("click", appLogic.addRule.bind(appLogic));
 
             var deleteButtons = $(".deleteRuleButton")
@@ -721,14 +683,14 @@ appUi = {
         },
 
         ruleFormsProtocols: function(protocols){
-            var optionsStr = "";
-
-            for(var k = 0; k < protocols.length; k++){
-                optionsStr += "<option value='" + protocols[k] + "'>" + protocols[k] + "</option>";
-            }
-
-            $("#addRuleProtocol").html(optionsStr)
-            $("#editRuleNewProtocol").html(optionsStr)
+            //var optionsStr = "";
+            //
+            //for(var k = 0; k < protocols.length; k++){
+            //    optionsStr += "<option value='" + protocols[k] + "'>" + protocols[k] + "</option>";
+            //}
+            //
+            //$("#addRuleProtocol").html(optionsStr)
+            //$("#editRuleNewProtocol").html(optionsStr)
         },
 
         dashboard: function (tableData) {

@@ -10,17 +10,15 @@ import wtforms_json
 import json
 import datetime
 
-BLOCK_EVENT_TYPE = "block"
-
+BLOCK_EVENT_TYPE = "Block"
 EVENT_TIME = "time"
-
 BLOCKS = "blocks"
-
 EVENT_TYPE = "type"
-
 SESSIONS = "sessions"
-
 DATASETS = "datasets"
+PROTOCOLS_BY_PORT = { # TODO: fill with key and values
+
+}
 
 app = Flask(__name__, static_folder='static')
 app.debug = True
@@ -147,32 +145,6 @@ def set_mode():
 	except:
 		return fail('Could not change firewall mode')
 
-@app.route('/state', methods=['GET'])
-@login_required
-def get_state():
-	"""
-
-	"""
-	try:
-		state = json.dumps(Firewall.state_to_boolean(firewall.get_state()))
-		return success('Firewall state retrieved succesfuly', 200, state)
-	except:
-		return fail('Could not retrieve firewall state')
-
-@app.route('/state', methods=['POST'])
-@login_required
-def set_state():
-	"""
-
-	"""
-	try:
-		state = request.get_json()['state']
-		firewall.set_state(Firewall.boolean_to_state(state))
-		return success('Firewall state retrieved succesfuly', 200)
-	except:
-		return fail('Could not change firewall state')
-
-
 @app.route('/rules', methods=['GET'])
 @login_required
 def rules_table():
@@ -278,48 +250,12 @@ def get_blocks_per_session_by_interval():
 
 		for event in last_10_mins_events:
 			event_time_mins = int(event["time"].split(" ")[1].split(":")[1])
-			barChartData[DATASETS][SESSIONS][event_time_mins] +=1
+			ten_mins_ago_time = datetime.datetime.now() - datetime.timedelta(minutes=10)
+			time_interval = event_time_mins - ten_mins_ago_time.minute
+			barChartData[DATASETS][SESSIONS][time_interval] += 1
 
-			if is_in_time_interval(event[EVENT_TIME], 10, 9):
-				barChartData[DATASETS][SESSIONS][0] += 1
-				if event[EVENT_TYPE] == BLOCK_EVENT_TYPE:
-					barChartData[DATASETS][BLOCKS][0] += 1
-			elif (is_in_time_interval(event[EVENT_TIME], 9, 8)):
-				barChartData[DATASETS][SESSIONS][1] += 1
-				if event[EVENT_TYPE] == BLOCK_EVENT_TYPE:
-					barChartData[DATASETS][BLOCKS][1] += 1
-			elif (is_in_time_interval(event[EVENT_TIME], 8, 7)):
-				barChartData[DATASETS][SESSIONS][2] += 1
-				if event[EVENT_TYPE] == BLOCK_EVENT_TYPE:
-					barChartData[DATASETS][BLOCKS][2] += 1
-			elif (is_in_time_interval(event[EVENT_TIME], 7, 6)):
-				barChartData[DATASETS][SESSIONS][3] += 1
-				if event[EVENT_TYPE] == BLOCK_EVENT_TYPE:
-					barChartData[DATASETS][BLOCKS][3] += 1
-			elif (is_in_time_interval(event[EVENT_TIME], 6, 5)):
-				barChartData[DATASETS][SESSIONS][4] += 1
-				if event[EVENT_TYPE] == BLOCK_EVENT_TYPE:
-					barChartData[DATASETS][BLOCKS][4] += 1
-			elif (is_in_time_interval(event[EVENT_TIME], 5, 4)):
-				barChartData[DATASETS][SESSIONS][5] += 1
-				if event[EVENT_TYPE] == BLOCK_EVENT_TYPE:
-					barChartData[DATASETS][BLOCKS][5] += 1
-			elif (is_in_time_interval(event[EVENT_TIME], 4, 3)):
-				barChartData[DATASETS][SESSIONS][6] += 1
-				if event[EVENT_TYPE] == BLOCK_EVENT_TYPE:
-					barChartData[DATASETS][BLOCKS][6] += 1
-			elif (is_in_time_interval(event[EVENT_TIME], 3, 2)):
-				barChartData[DATASETS][SESSIONS][7] += 1
-				if event[EVENT_TYPE] == BLOCK_EVENT_TYPE:
-					barChartData[DATASETS][BLOCKS][7] += 1
-			elif (is_in_time_interval(event[EVENT_TIME], 2, 1)):
-				barChartData[DATASETS][SESSIONS][8] += 1
-				if event[EVENT_TYPE] == BLOCK_EVENT_TYPE:
-					barChartData[DATASETS][BLOCKS][8] += 1
-			elif (is_in_time_interval(event[EVENT_TIME], 1, 0)):
-				barChartData[DATASETS][SESSIONS][9] += 1
-				if event[EVENT_TYPE] == BLOCK_EVENT_TYPE:
-					barChartData[DATASETS][BLOCKS][9] += 1
+			if event[EVENT_TYPE] == BLOCK_EVENT_TYPE:
+				barChartData[DATASETS][BLOCKS][time_interval] += 1
 
 		return success('Stats table retrieved succesfuly', 200, barChartData)
 
@@ -331,15 +267,18 @@ def get_blocks_per_session_by_interval():
 def get_blocks_per_protocol():
 
 	try:
-		pieChartData = {
-			"HTTP": 0,
-			"TCP": 0,
-			"UDP": 0
-		};
+		pieChartData = {}
+		for protocol in PROTOCOLS_BY_PORT:
+			pieChartData[protocol] = 0
+		# pieChartData = {
+		# 	"HTTP": 0,
+		# 	"TCP": 0,
+		# 	"UDP": 0
+		# };
 
 		for event in firewall.get_events():
 			if (is_in_time_interval(event["time"], 5)):
-				pieChartData[event["protocol"]] += 1
+				pieChartData[event["destinationPort"]] += 1 # TODO: test after PROTOCOLS_BY_PORT dictionary is filled
 
 		return success('Stats table retrieved successfully', 200, pieChartData)
 	except:
@@ -368,7 +307,7 @@ def get_sessions_per_direction():
 def is_in_time_interval(check_time_str, interval):
 	time_interval = datetime.datetime.now() - datetime.timedelta(minutes=interval)
 	check_time = datetime.datetime.strptime(check_time_str, "%d\%m\%Y %H:%M:%S")
-	return (check_time > time_interval and check_time < time_interval)
+	return (check_time > time_interval)
 
 if __name__ == '__main__':
 	# app.run()
