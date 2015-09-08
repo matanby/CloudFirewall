@@ -50,18 +50,42 @@
                     <input type="text" id="loginInputUsername" class="form-control" placeholder="Username" required autofocus>
                     <label for="loginInputPassword" class="sr-only">Password</label>
                     <input type="password" id="loginInputPassword" class="form-control" placeholder="Password" required>
-                    <button class="btn btn-lg btn-success btn-block">Sign in</button>
                 </form>
-
+                <button class="btn btn-lg btn-success btn-block">Sign in</button>
             </div>
         </div>
 
-        <div id="dashboard" class="hidden">
+        <div id="dashboard" class="hidden" style="margin-top: -50px;">
             <h1 class="page-header">Dashboard</h1>
 
-            <h2>Mode: <small id="dashboardModeHeader"></small></h2>
+            <h2 class="sub-header">Mode: <small id="dashboardModeHeader"></small></h2>
 
-            <div class="table-responsive" style="margin-top: 100px;">
+
+            <div class="row" style="margin-top: 10px;">
+                <h2 class="sub-header" style="margin-left: 15px;">Statistics</h2>
+                <div class="col-xs-3">
+                    <canvas id="blocksAndAllowsPerMonth" width="400" height="180"></canvas>
+                    <h4>Data Flow</h4>
+                    <span class="text-muted">Displays the data flow in the firewall<br> in each second in the last 10 minutes</span>
+                </div>
+                <div class="col-xs-3">
+                    <canvas id="blocksPerSessionByInterval" width="400" height="180"></canvas>
+                    <h4>Blocks Per Sessions</h4>
+                    <span class="text-muted">Total Sessions in blue<br>Blocks in gray</span>
+                </div>
+                <div class="col-xs-3">
+                    <canvas id="blocksPerProtocol" width="400" height="180"></canvas>
+                    <h4>Sessions Per Protocol</h4>
+                    <span class="text-muted">Displays the total amount of<br> sessions opened per protocol type</span>
+                </div>
+                <div class="col-xs-3">
+                    <canvas id="sessionsPerDirection" width="400" height="180"></canvas>
+                    <h4>Sessions Per Direction</h4>
+                    <span class="text-muted">Displays the total amount of sessions<br>opened per direction (incoming\outgoing)</span>
+                </div>
+            </div>
+
+            <div class="table-responsive" style="margin-top: 20px; height:200px; overflow:auto;">
                 <h2 class="sub-header">Events Table</h2>
                 <table class="table table-striped" id="dashboardEventsTable">
                     <thead>
@@ -81,35 +105,11 @@
                 </table>
             </div>
 
-            <div class="row" style="margin-top: 100px;">
-                <h2 class="sub-header">Statistics</h2>
-                <div class="col-xs-3">
-                    <canvas id="blocksAndAllowsPerMonth" width="400" height="400"></canvas>
-                    <h4>Blocks And Allows Per Month</h4>
-                    <span class="text-muted">Allows in blue<br>Blocks in gray</span>
-                </div>
-                <div class="col-xs-3">
-                    <canvas id="blocksPerSessionByInterval" width="400" height="400"></canvas>
-                    <h4>Blocks Per Session By Time Interval</h4>
-                    <span class="text-muted">Allow in blue<br>Blocks in gray</span>
-                </div>
-                <div class="col-xs-3">
-                    <canvas id="blocksPerProtocol" width="400" height="400"></canvas>
-                    <h4>Blocks Per Protocol</h4>
-                    <span class="text-muted">Details</span>
-                </div>
-                <div class="col-xs-3">
-                    <canvas id="sessionsPerDirection" width="400" height="400"></canvas>
-                    <h4>Sessions Per Direction</h4>
-                    <span class="text-muted">Details</span>
-                </div>
-            </div>
-
-            <div class="row" style="margin-top: 100px;">
+            <div class="row" style="margin-top: 5px;">
                 <h2 class="sub-header">Logger</h2>
-                <textarea id="dashboardEventslogger" class="col-xs-12" disabled>
+                <textarea id="dashboardEventslogger" class="col-xs-11" style="height: 100px;" disabled>
                 </textarea>
-                <button type="button" class="btn btn-primary btn-block" style="height:50px;" id="loggerClearButton">Clear Log</button>
+                <button type="button" class="btn btn-primary col-xs-1" style="height:100px;" id="loggerClearButton">Clear Log</button>
             </div>
         </div>
 

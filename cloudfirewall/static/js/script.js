@@ -18,7 +18,7 @@ appLogic = {
         //login section
         this.loginSection = document.querySelector("#login");
         this.socket = io.connect();
-        this.socket.emit('get_events', {});
+        this.socket.emit('get_events');
     },
 
     setEventListeners: function () {
@@ -86,6 +86,7 @@ appLogic = {
             },
             error: function (data){
                 appUi.showError("You need to be logged in in order to log out")
+                appUi.showLogin()
             }
         });
     },
@@ -111,6 +112,7 @@ appLogic = {
             error: function (response){
                 appUi.hideLoader();
                 appUi.showError("You need to be logged in to access the dashboard")
+                appUi.showLogin()
             }
         });
     },
@@ -271,6 +273,7 @@ appLogic = {
             error: function (response){
                 appUi.hideLoader();
                 appUi.showError("You need to be logged in to access the settings")
+                appUi.showLogin()
             }
         });
     },
@@ -506,7 +509,13 @@ appUi = {
     setEventListeners: function () {
         $("#errorModal button").get(0).addEventListener("click" , this.hideError.bind(this));
         $("#top_bar .dashboardLink").get(0).addEventListener("click", appLogic.getDashboard.bind(appLogic));
-        $("#login .form-signin button").get(0).addEventListener("click", appLogic.login.bind(appLogic));
+        $("#login button").get(0).addEventListener("click", appLogic.login.bind(appLogic));
+        $(".form-signin").get(0).addEventListener('keypress', function (e) {
+            var key = e.which || e.keyCode;
+            if (key === 13) {
+              appLogic.login();
+            }
+        });
         $("#top_bar .logoutLink").get(0).addEventListener("click", appLogic.logout.bind(appLogic));
         $("#top_bar .settingsLink").get(0).addEventListener("click", appLogic.getSettings.bind(appLogic));
         $("#setFirewallMode").get(0).addEventListener("click", appLogic.setMode.bind(appLogic));
@@ -618,7 +627,12 @@ appUi = {
         firewallMode: function(mode){
             $("#settingsModeHeader").html(mode)
             $("#dashboardModeHeader").html(mode)
-
+            if (mode === "PassThrough"){
+                $("#settingsTableRules").hide()
+            }
+            else{
+                $("#settingsTableRules").show()
+            }
         },
 
         rulesTable: function(rules, protocols){
