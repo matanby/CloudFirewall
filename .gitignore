@@ -60,6 +60,11 @@ docs/_build/
 target/
 
 .idea
+
+# Dependencies
 pox
-TODO
 mininet
+
+# Temp files
+TODO
+events.bin
