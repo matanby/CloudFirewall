@@ -1,0 +1,17 @@
+physical_ports:
+  incoming: 1
+  outgoing: 2
+
+mode: WhiteList
+
+flow_active_time_secs: 60
+
+firewall_dpid: 200
+
+blacklist_rules:
+#  - { direction: Outgoing, src_ip: 10.0.0.1, dst_ip: 10.0.0.2, protocol: TCP, src_port: '*', dst_port: 5001 }
+  - { direction: Incoming, src_ip: 10.0.0.2, dst_ip: 10.0.0.1, protocol: TCP, src_port: 5001, dst_port: '*' }
+
+whitelist_rules:
+  - { direction: Outgoing, src_ip: 10.0.0.1, dst_ip: 10.0.0.2, protocol: TCP, src_port: '*', dst_port: 5001 }
+  - { direction: Incoming, src_ip: 10.0.0.2, dst_ip: 10.0.0.1, protocol: TCP, src_port: 5001, dst_port: '*' }
