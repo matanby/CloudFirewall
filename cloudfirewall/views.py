@@ -1,22 +1,32 @@
-from flask import Flask, send_from_directory, make_response, jsonify, request
-from flask.ext.login import LoginManager, current_user, login_user, login_required, logout_user
-from models import User
-from forms import LoginForm
-# from flask.ext.socketio import SocketIO
-import wtforms_json
 import time
 import xmlrpclib
 
+from flask import (
+	Flask,
+	send_from_directory,
+	make_response,
+	jsonify,
+	request
+)
 
-BLOCKED_EVENT_TYPE = "Blocked"
-EVENT_TIME = "time"
-BLOCKS = "blocks"
-EVENT_TYPE = "action"
-SESSIONS = "sessions"
-DATASETS = "datasets"
+from flask.ext.login import (
+	LoginManager,
+	current_user,
+	login_user,
+	login_required,
+	logout_user
+)
+
+import wtforms_json
+# from flask.ext.socketio import SocketIO
+
+from cloudfirewall.models import User
+from cloudfirewall.forms import LoginForm
+
+
 PROTOCOLS_FILE = "protocols.txt"
 
-
+# Create a Flask app.
 app = Flask(__name__, static_folder='static')
 app.debug = True
 app.config.from_object('config')
@@ -243,12 +253,14 @@ def delete_rule():
 	except Exception, e:
 		return fail('Could not delete the rule from firewall. Error: %s' % e)
 
+# TODO: remove this?
 # @socketio.on('get_events')
 # @login_required
 # def handle_message():
 # 	print "user connected to get events socket"
 
 
+# TODO: remove this?
 def events_updater():
 	import threading
 	threading.Timer(50000.0, events_updater).start()
@@ -260,71 +272,69 @@ def events_updater():
 @login_required
 def get_blocks_and_allows_stats():
 	# TODO: get data from firewall
-	lineChartData = {
+	line_chart_data = {
 		"labels": ["", "", "", "", "", "", "", "", "", "", "", ""],
 		"datasets": {
 			"allows": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			"blocks": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 		}
-	};
+	}
 
-	return success('Stats table retrieved successfully', 200, lineChartData)
-
-	# TODO: return failure in the relveant cases
+	# TODO: return failure in the relevant cases
+	return success('Stats table retrieved successfully', 200, line_chart_data)
 
 
 @app.route('/BlocksPerSessionByIntervalStats', methods=['GET'])
 @login_required
 def get_blocks_per_session_by_interval():
 	try:
-
-		barChartData = {
-			"labels": ["10 mins ago", "9 mins ago", "8 mins ago", "7 mins ago", "6 mins ago", "5 mins ago",
-					   "4 mins ago", "3 mins ago", "2 mins ago", "1 mins ago"],
-			DATASETS: {
-				SESSIONS: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-				BLOCKS: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+		bar_chart_data = {
+			'labels': ["10 mins ago", "9 mins ago", "8 mins ago", "7 mins ago", "6 mins ago", "5 mins ago", "4 mins ago", "3 mins ago", "2 mins ago", "1 mins ago"],
+			'datasets': {
+				'sessions': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+				'blocks': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 			}
-		};
+		}
 
-		last_10_mins_events = firewall.get_events(time.time() - 10*60, time.time())
+		last_10_mins_events = firewall.get_events(time.time() - 10 * 60, time.time())
 
 		for event in last_10_mins_events:
 			event_time_mins = int(event["time"]) / 60
-			ten_mins_ago_time = time.time() - 10*60
+			ten_mins_ago_time = time.time() - 10 * 60
 			time_interval = event_time_mins - (int(ten_mins_ago_time) / 60)
-			barChartData[DATASETS][SESSIONS][time_interval] += 1
+			bar_chart_data['datasets']['sessions'][time_interval] += 1
 
-			if event[EVENT_TYPE] == BLOCKED_EVENT_TYPE:
-				barChartData[DATASETS][BLOCKS][time_interval] += 1
+			if event['action'] == 'Blocked':
+				bar_chart_data['datasets']['blocks'][time_interval] += 1
 
-		return success('Stats table retrieved successfully', 200, barChartData)
+		return success('Stats table retrieved successfully', 200, bar_chart_data)
 
-	except:
-		return fail('Could not retrieve blocks per session by interval stats')
+	except Exception, e:
+		return fail('Could not retrieve stats. Error: %s' % e)
 
 
 @app.route('/ProtocolStats', methods=['GET'])
 @login_required
 def get_sessions_per_protocol():
 	try:
-		pieChartData = {}
+		pie_chart_data = {}
 
-		for event in firewall.get_events(time.time() - 10*60, time.time()):
+		for event in firewall.get_events(time.time() - 10 * 60, time.time()):
 			dst_port = event["dst_port"]
 			if dst_port in PROTOCOLS_BY_PORT:
 				protocol = PROTOCOLS_BY_PORT[dst_port] + " (%s)" % dst_port
 			else:
 				protocol = str(dst_port)
 
-			if protocol not in pieChartData:
-				pieChartData[protocol] = 1
+			if protocol not in pie_chart_data:
+				pie_chart_data[protocol] = 1
 			else:
-				pieChartData[protocol] += 1
+				pie_chart_data[protocol] += 1
 
-		return success('Stats table retrieved successfully', 200, pieChartData)
-	except:
-		return fail('Could not retrieve protocol stats')
+		return success('Stats table retrieved successfully', 200, pie_chart_data)
+
+	except Exception, e:
+		return fail('Could not retrieve stats. Error: %s' % e)
 
 
 @app.route('/SessionsPerDirectionStats', methods=['GET'])
@@ -332,35 +342,33 @@ def get_sessions_per_protocol():
 def get_sessions_per_direction():
 
 	try:
-		pieChartData = {
-			"Incoming": 0,
-			"Outgoing": 0
-		};
+		pie_chary_data = {
+			'Incoming': 0,
+			'Outgoing': 0
+		}
 
-		for event in firewall.get_events(time.time() - 60*10, time.time()):
-			pieChartData[event["direction"]] += 1
+		for event in firewall.get_events(time.time() - 60 * 10, time.time()):
+			pie_chary_data[event["direction"]] += 1
 
-		return success('Stats table retrieved successfully', 200, pieChartData)
+		return success('Stats table retrieved successfully', 200, pie_chary_data)
 
-	except:
-		return fail('Could not retrieve sessions per direction stats')
+	except Exception, e:
+		return fail('Could not retrieve stats. Error: %s' % e)
 
 
 def read_protocols():
-	prots = {}
+	protocols = {}
 	with open(PROTOCOLS_FILE, 'r') as f:
 		for line in f.readlines():
 			fields = line.split('\t')
 			prot_no = int(fields[0].strip())
 			proto_name = fields[1].strip()
 			proto_desc = fields[2].strip()
-			prots[prot_no] = proto_name
+			protocols[prot_no] = proto_name
 
-	return prots
+	return protocols
 
+PROTOCOLS_BY_PORT = read_protocols()
 
 if __name__ == '__main__':
-	PROTOCOLS_BY_PORT = read_protocols()
 	app.run()
-	# socketio.run(app)
-	pass
