@@ -2,6 +2,7 @@ from SimpleXMLRPCServer import SimpleXMLRPCServer
 import threading
 from enum import Enum
 import pickle
+import time
 import pox
 import pox.log
 import pox.core
@@ -12,7 +13,6 @@ from pox.lib.packet.ipv4 import ipv4
 from pox.lib.packet.udp import udp
 from pox.lib.packet.tcp import tcp
 
-import ipc
 import interface
 import utils
 from of_base import OpenFlowController
@@ -80,6 +80,12 @@ class Rule(utils.Container):
 		self.direction = Direction(self.direction)
 		self.protocol = Protocol(self.protocol)
 
+		if isinstance(self.src_port, str) and '-' not in self.src_port and '*' not in self.src_port:
+			self.src_port = int(self.src_port)
+
+		if isinstance(self.dst_port, str) and '-' not in self.dst_port and '*' not in self.dst_port:
+			self.dst_port = int(self.dst_port)
+
 	def as_dict(self):
 		return {
 			'direction': self.direction.value,
@@ -129,12 +135,12 @@ class Rule(utils.Container):
 
 		# Destination port
 		if isinstance(self.dst_port, str) and '-' in self.dst_port:
-			dst_port_start, source_port_end = self.dst_port.replace(' ', '').split('-')
-			dst_port_start, source_port_end = int(self.dst_port), int(self.dst_port)
+			dst_port_start, dst_port_end = self.dst_port.replace(' ', '').split('-')
+			dst_port_start, dst_port_end = int(dst_port_start), int(dst_port_end)
 		else:
-			dst_port_start, source_port_end = self.dst_port, self.dst_port
+			dst_port_start, dst_port_end = self.dst_port, self.dst_port
 
-		if not dst_port_start <= dst_port <= source_port_end and dst_port_start != '*':
+		if not dst_port_start <= dst_port <= dst_port_end and dst_port_start != '*':
 			return False
 
 		return True
@@ -151,19 +157,25 @@ class Firewall(OpenFlowController):
 		self._outgoing_port = None
 		self._mode = None
 		self._flow_active_time_secs = None
+		self._time_to_keep_stats_secs = None
 		self._firewall_dpid = None
 		self._blacklist_rules = None
 		self._whitelist_rules = None
+		self._active_flows = []
+		self._total_bandwidth = {}  # time -> bandwidth (Mbit/sec)
 		self._load_configuration()
 		self._events = self._load_events()
 		super(Firewall, self).__init__()
+		self._log.info('Firewall started, initial mode: %s' % self._mode.name)
 
 	def set_mode(self, new_mode):
+		self._log.info('Mode changed to: %s' % new_mode.name)
 		self._mode = new_mode
 		self._dump_configuration()
 		self._remove_all_flow_records()
 
 	def _remove_all_flow_records(self):
+		self._log.info('Removing all active flow records')
 		if self._firewall_dpid in self._switches:
 			self._switches[self._firewall_dpid].remove_flow_mod()
 
@@ -172,9 +184,11 @@ class Firewall(OpenFlowController):
 			raise ValueError("Can't edit rules while in passthrough mode")
 
 		if self._mode == Mode.BlackList:
+			self._log.info('Adding new rule to the blacklist rules set: %s' % rule)
 			self._blacklist_rules.append(rule)
 
 		if self._mode == Mode.WhiteList:
+			self._log.info('Adding new rule to the whitelist rules set: %s' % rule)
 			self._whitelist_rules.append(rule)
 
 		self._dump_configuration()
@@ -187,12 +201,14 @@ class Firewall(OpenFlowController):
 		if self._mode == Mode.BlackList:
 			if len(self._blacklist_rules) - 1 < rule_number:
 				raise ValueError('Rule not found in rules list')
-			self._blacklist_rules.pop(rule_number)
+			rule = self._blacklist_rules.pop(rule_number)
+			self._log.info('Removing rule from the blacklist rules set: %s' % rule)
 
 		if self._mode == Mode.WhiteList:
 			if len(self._whitelist_rules) - 1 < rule_number:
 				raise ValueError('Rule not found in rules list')
-			self._whitelist_rules.pop(rule_number)
+			rule = self._whitelist_rules.pop(rule_number)
+			self._log.info('Removing rule from the whitelist rules set: %s' % rule)
 
 		self._dump_configuration()
 		self._remove_all_flow_records()
@@ -204,20 +220,25 @@ class Firewall(OpenFlowController):
 		if self._mode == Mode.BlackList:
 			if len(self._blacklist_rules) - 1 < rule_number:
 				raise ValueError('Rule not found in rules list')
-			self._blacklist_rules.pop(rule_number)
+			old_rule = self._blacklist_rules.pop(rule_number)
 			self._blacklist_rules.append(rule)
+			self._log.info('Replaced rule from the blacklist rules set: \n old: %s\n new: %s' % (old_rule, rule))
 
 		if self._mode == Mode.WhiteList:
 			if len(self._whitelist_rules) - 1 < rule_number:
 				raise ValueError('Rule not found in rules list')
-			self._whitelist_rules.pop(rule_number)
+			old_rule = self._whitelist_rules.pop(rule_number)
 			self._whitelist_rules.append(rule)
+			self._log.info('Replaced rule from the whitelist rules set: \n old: %s\n new: %s' % (old_rule, rule))
 
 		self._dump_configuration()
 		self._remove_all_flow_records()
 
 	def get_events(self, start_time, end_time):
 		return [event.as_dict() for event in self._events if start_time <= event.time <= end_time]
+
+	def get_total_bandwidth(self, start_time, end_time):
+		return {t: b for t, b in self._total_bandwidth.iteritems() if start_time < t < end_time}
 
 	def _handle_packet(self, event):
 		# Ignore events that are related to other switches in the network.
@@ -231,7 +252,15 @@ class Firewall(OpenFlowController):
 			self._log.warning('Received a packet from an unfamiliar port: %s' % packet_in.in_port)
 			return
 
-		if self._is_flow_allowed(packet_in.in_port, packet):
+		# If we already installed a matching flow record for this type of packet
+		# no need to reinstall one, simply forward this packet to the output port set in the flow rule.
+		flow_record = self._switches[event.dpid].has_match(packet)
+		if flow_record:
+			self._switches[event.dpid].send_packet(packet_in.data, [flow_record.out_port], of.OFPP_NONE)
+			return
+
+		action = self._get_action_for_flow(packet, packet_in.in_port)
+		if action == Action.Allowed:
 			out_port = self._outgoing_port if packet_in.in_port == self._incoming_port else self._incoming_port
 		else:
 			# install rule in the switch that ignores that packet
@@ -241,18 +270,18 @@ class Firewall(OpenFlowController):
 		match = of.ofp_match.from_packet(packet, in_port=packet_in.in_port)
 		self._switches[event.dpid].add_flow_mod(action, match, buffer_id=packet_in.buffer_id, idle_timeout=self._flow_active_time_secs)
 
-	def _is_flow_allowed(self, input_port, packet):
+	def _get_action_for_flow(self, packet, in_port):
 		# TODO: allow ICMP blocking
 		if not isinstance(packet.next, ipv4) or not (isinstance(packet.next.next, tcp) or isinstance(packet.next.next, udp)):
-			return True
+			return Action.Allowed
 
 		# Find the direction of the packet.
-		if input_port == self._outgoing_port:
+		if in_port == self._outgoing_port:
 			direction = Direction.Incoming
-		elif input_port == self._incoming_port:
+		elif in_port == self._incoming_port:
 			direction = Direction.Outgoing
 		else:
-			return False
+			return Action.Blocked
 
 		# Find the protocol of the packet.
 		if isinstance(packet.next.next, tcp):
@@ -268,14 +297,81 @@ class Firewall(OpenFlowController):
 
 		matches_packet = lambda rule: rule.matches(direction, src_ip, dst_ip, protocol, src_port, dst_port)
 
-		if self._mode == Mode.PassThrough:
-			return True
-
-		elif self._mode == Mode.BlackList:
-			return filter(matches_packet, self._blacklist_rules) == []
+		if self._mode == Mode.BlackList:
+			has_match = filter(matches_packet, self._blacklist_rules) != []
+			action = Action.Blocked if has_match else Action.Allowed
 
 		elif self._mode == Mode.WhiteList:
-			return filter(matches_packet, self._whitelist_rules) != []
+			has_match = filter(matches_packet, self._whitelist_rules) != []
+			action = Action.Allowed if has_match else Action.Blocked
+		else:  # Passthrough mode
+			action = Action.Allowed
+
+		event = Event(
+			direction=direction,
+			src_ip=src_ip,
+			dst_ip=dst_ip,
+			protocol=protocol,
+			src_port=src_port,
+			dst_port=dst_port,
+			action=action,
+			time=time.time()
+		)
+
+		current_time = time.time()
+		self._events.append(event)
+
+		# Cleanup old events.
+		self._events = [event for event in self._events if event.time > current_time - self._time_to_keep_stats_secs]
+		self._dump_events()
+
+		# TODO: remove
+		# self._log.info('new flow: (direction-%s, src_ip-%s, dst_ip-%s, protocol-%s, src_port-%s, dst_port-%s, action-%s)' % (direction.name, src_ip, dst_ip, protocol, src_port, dst_port, action.name))
+		self._log.info(event)
+		return action
+
+	def _handle_ConnectionUp(self, event):
+		super(Firewall, self)._handle_ConnectionUp(event)
+
+		# Ignore events that are related to other switches in the network.
+		if event.dpid != self._firewall_dpid:
+			return
+
+		# Enable flow stats retrieval.
+		self._switches[event.dpid].enable_flow_stats_retrieval(self._flow_starts_retrieval_interval_secs)
+
+	def _handle_FlowStatsReceived(self, event):
+		"""
+		Handles the FlowStatsReceived event received from some switch by
+		calculating the current utilization of each link connecting to this switch.
+		"""
+
+		super(Firewall, self)._handle_FlowStatsReceived(event)
+
+		# Ignore events that are related to other switches in the network.
+		if event.dpid != self._firewall_dpid:
+			return
+
+		total_bytes_added = 0.0
+		for current_flow_stat in event.stats:
+			dpid, out_port = event.dpid, current_flow_stat.actions[0].port
+			if out_port == 65533:  # Ignore flows destined to the controller.
+				continue
+
+			# Calculate the flow's average throughput in the interval between the time
+			# when the last flow stat was received from this switch and now.
+			last_flow_stat = self._get_flow_stat(current_flow_stat.match)
+			total_bytes_added += self._calc_added_bytes(last_flow_stat, current_flow_stat)
+
+		current_bandwidth_mbit_sec = total_bytes_added * 8 / 1024 / 1024
+		self._log.debug('Current bandwidth: %s Mbit/sec:' % current_bandwidth_mbit_sec)
+
+		current_time = time.time()
+		self._total_bandwidth[current_time] = current_bandwidth_mbit_sec
+
+		# Cleanup old bandwidth statistics.
+		self._total_bandwidth = {t: b for t, b in self._total_bandwidth.iteritems() if t > current_time - self._time_to_keep_stats_secs}
+		self._active_flows = event.stats
 
 	def _load_configuration(self):
 		config = utils.load_yaml(self.CONFIG_FILE_PATH)
@@ -283,6 +379,8 @@ class Firewall(OpenFlowController):
 		self._outgoing_port = config['physical_ports']['outgoing']
 		self._mode = Mode(config['mode'])
 		self._flow_active_time_secs = config['flow_active_time_secs']
+		self._time_to_keep_stats_secs = config['time_to_keep_stats_secs']
+		self._flow_starts_retrieval_interval_secs = config['flow_starts_retrieval_interval_secs']
 		self._firewall_dpid = config['firewall_dpid']
 		self._blacklist_rules = [Rule(**rule_dict) for rule_dict in config['blacklist_rules']]
 		self._whitelist_rules = [Rule(**rule_dict) for rule_dict in config['whitelist_rules']]
@@ -295,6 +393,8 @@ class Firewall(OpenFlowController):
 			},
 			'mode': self._mode.name,
 			'flow_active_time_secs': self._flow_active_time_secs,
+			'seconds_to_keep_bandwidth_stats': self._time_to_keep_stats_secs,
+			'flow_starts_retrieval_interval_secs': self._flow_starts_retrieval_interval_secs,
 			'firewall_dpid': self._firewall_dpid,
 			'blacklist_rules': [rule.as_dict() for rule in self._blacklist_rules],
 			'whitelist_rules': [rule.as_dict() for rule in self._whitelist_rules],
@@ -308,6 +408,47 @@ class Firewall(OpenFlowController):
 				return pickle.loads(f.read())
 		except:
 			return []
+
+	def _dump_events(self):
+		with open(self.EVENTS_FILE, 'w') as f:
+			f.write(pickle.dumps(self._events))
+
+	def _get_flow_stat(self, match):
+		"""
+		Finds and returns the latest flow statistics object as received
+		from a given switch, which matches a given ofp_match object.
+		"""
+
+		for flow in self._active_flows:
+			# If both ofp_match objects match each other, they represent the same flow.
+			if flow.match.matches_with_wildcards(match) and match.matches_with_wildcards(flow.match):
+				return flow
+
+		return None
+
+	@staticmethod
+	def _calc_added_bytes(first_flow_stat, second_flow_stat):
+		"""
+		Calculates the average number of transferred bytes as
+		reported in two different flow statistic objects.
+		"""
+
+		# Calculate the total duration of the flow by the second flow stat.
+		second_duration = second_flow_stat.duration_sec + second_flow_stat.duration_nsec * 0.000000001
+		second_byte_count = second_flow_stat.byte_count
+
+		if first_flow_stat is None:
+			first_duration = 0
+			first_byte_count = 0
+		else:
+			# Calculate the total duration of the flow by the first flow stat.
+			first_duration = first_flow_stat.duration_sec + first_flow_stat.duration_nsec * 0.000000001
+			first_byte_count = first_flow_stat.byte_count
+
+		# Calculate and return the average bytes count in the time interval between the two flow stats.
+		byte_count_diff = second_byte_count - first_byte_count
+		duration_diff = second_duration - first_duration
+		return byte_count_diff / duration_diff if duration_diff != 0 else byte_count_diff
 
 	@property
 	def mode(self):

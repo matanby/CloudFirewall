@@ -1,7 +1,6 @@
-from email import utils
 import threading
 from SimpleXMLRPCServer import SimpleXMLRPCServer
-import ipc
+
 import of_firewall
 import utils
 
@@ -15,7 +14,7 @@ class FirewallInterface(object):
 
 	def __init__(self):
 		self._firewall = of_firewall.Firewall()
-		server = SimpleXMLRPCServer(('192.168.1.2', 9000), logRequests=True, allow_none=True)
+		server = SimpleXMLRPCServer(('', 9000), logRequests=False, allow_none=True)
 		self._server = server
 		server.register_function(self.get_mode, 'get_mode')
 		server.register_function(self.set_mode, 'set_mode')
@@ -24,6 +23,7 @@ class FirewallInterface(object):
 		server.register_function(self.delete_rule, 'delete_rule')
 		server.register_function(self.edit_rule, 'edit_rule')
 		server.register_function(self.get_events, 'get_events')
+		server.register_function(self.get_total_bandwidth, 'get_total_bandwidth')
 		server.register_function(self.set_mode, 'set_mode')
 		self._server_thread = threading.Thread(target=server.serve_forever)
 
@@ -54,6 +54,9 @@ class FirewallInterface(object):
 
 	def get_events(self, start_time, end_time):
 		return self._firewall.get_events(start_time, end_time)
+
+	def get_total_bandwidth(self, start_time, end_time):
+		return self._firewall.get_total_bandwidth(start_time, end_time)
 
 	def start_serve_loop(self):
 		self._server_thread.daemon = True
