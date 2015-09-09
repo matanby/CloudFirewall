@@ -49,7 +49,7 @@ class TwoNetworksTopology(Topo):
 		]
 
 		for edge in edges:
-			self.addLink(edge.left, edge.right)
+			self.addLink(edge.left, edge.right, bw=100)
 
 
 topos = {
