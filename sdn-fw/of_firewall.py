@@ -258,6 +258,7 @@ class Firewall(OpenFlowController):
 
 		self._dump_configuration()
 		self._remove_all_flow_records()
+		return rule
 
 	def edit_rule(self, rule_number, rule):
 		"""
@@ -283,6 +284,7 @@ class Firewall(OpenFlowController):
 
 		self._dump_configuration()
 		self._remove_all_flow_records()
+		return old_rule
 
 	def get_events(self, start_time, end_time):
 		"""
@@ -337,7 +339,6 @@ class Firewall(OpenFlowController):
 		Decides and returns the action (allow/block) that should be taken on a given packet.
 		"""
 
-		# TODO: allow ICMP blocking
 		if not isinstance(packet.next, ipv4) or not (isinstance(packet.next.next, tcp) or isinstance(packet.next.next, udp)):
 			return Action.Allowed
 
@@ -391,8 +392,6 @@ class Firewall(OpenFlowController):
 		self._events = [event for event in self._events if event.time > current_time - self._time_to_keep_stats_secs]
 		self._dump_events()
 
-		# TODO: remove
-		# self._log.info('new flow: (direction-%s, src_ip-%s, dst_ip-%s, protocol-%s, src_port-%s, dst_port-%s, action-%s)' % (direction.name, src_ip, dst_ip, protocol, src_port, dst_port, action.name))
 		self._log.info(event)
 		return action
 

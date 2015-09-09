@@ -40,13 +40,16 @@ class FirewallInterface(object):
 	def add_rule(self, direction, src_ip, dst_ip, protocol, src_port, dst_port):
 		rule = self._parse_rule(direction, src_ip, dst_ip, protocol, src_port, dst_port)
 		self._firewall.add_rule(rule)
+		return rule.as_dict()
 
 	def delete_rule(self, rule_number):
-		self._firewall.remove_rule(rule_number)
+		deleted_rule = self._firewall.remove_rule(rule_number)
+		return deleted_rule.as_dict()
 
 	def edit_rule(self, rule_number, direction, src_ip, dst_ip, protocol, src_port, dst_port):
 		rule = self._parse_rule(direction, src_ip, dst_ip, protocol, src_port, dst_port)
-		self._firewall.edit_rule(rule_number, rule)
+		old_rule = self._firewall.edit_rule(rule_number, rule)
+		old_rule.as_dict()
 
 	def get_events(self, start_time, end_time):
 		return self._firewall.get_events(start_time, end_time)
