@@ -33,6 +33,8 @@ class TwoNetworksTopology(Topo):
 		server_hosts = [
 			self.addHost('h1'),
 			self.addHost('h2'),
+			self.addHost('h3'),
+			self.addHost('h4'),
 		]
 
 		# Edges
@@ -41,11 +43,14 @@ class TwoNetworksTopology(Topo):
 			Edge(switches[0], firewall),
 			Edge(switches[1], firewall),
 
-			# h1 -> s101.
+			# h1, h2 -> s101.
 			Edge(server_hosts[0], switches[0]),
+			Edge(server_hosts[1], switches[0]),
 
-			# h2 -> s102.
-			Edge(server_hosts[1], switches[1]),
+			# h3, h4 -> s102.
+			Edge(server_hosts[2], switches[1]),
+			Edge(server_hosts[3], switches[1]),
+
 		]
 
 		for edge in edges:
