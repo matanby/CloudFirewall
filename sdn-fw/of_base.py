@@ -186,7 +186,7 @@ class OpenFlowSwitch(object):
 		match = of.ofp_match.from_packet(packet)
 		for fr in self._flow_table:
 			if fr.match.matches_with_wildcards(match):
-				return True
+				return fr
 
 		return False
 
@@ -263,6 +263,10 @@ class OpenFlowController(object):
 		# Ignore incomplete packets.
 		if not packet.parsed:
 			self._log.warning("Ignoring incomplete packet")
+			return
+
+		# Ignore IPv6 discovery messages:
+		if str(packet.dst).startswith('33:33:'):
 			return
 
 		self._handle_packet(event)
