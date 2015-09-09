@@ -1,5 +1,3 @@
-from SimpleXMLRPCServer import SimpleXMLRPCServer
-import threading
 from enum import Enum
 import pickle
 import time
@@ -102,7 +100,7 @@ class Rule(utils.Container):
 			return False
 
 		# Protocol
-		if self.protocol != protocol:
+		if self.protocol != Protocol.TCP_UDP and self.protocol != protocol:
 			return False
 
 		# Source IP
