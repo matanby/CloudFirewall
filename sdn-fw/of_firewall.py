@@ -17,12 +17,20 @@ from of_base import OpenFlowController
 
 
 class Mode(Enum):
+	"""
+	Represents a firewall's working mode.
+	"""
+
 	WhiteList = 'WhiteList'
 	BlackList = 'BlackList'
 	PassThrough = 'PassThrough'
 
 
 class Protocol(Enum):
+	"""
+	Represents L3/L4 protocols.
+	"""
+
 	ICMP = 'ICMP'
 	TCP = 'TCP'
 	UDP = 'UDP'
@@ -30,16 +38,28 @@ class Protocol(Enum):
 
 
 class Direction(Enum):
+	"""
+	Represents packets directions.
+	"""
+
 	Incoming = 'Incoming'
 	Outgoing = 'Outgoing'
 
 
 class Action(Enum):
+	"""
+	Represents a firewall's action.
+	"""
+
 	Blocked = 'Blocked'
 	Allowed = 'Allowed'
 
 
 class Event(utils.Container):
+	"""
+	Represents an event handled at the firewall.
+	"""
+
 	def __init__(self, **kwargs):
 		self.direction = None
 		self.src_ip = None
@@ -66,6 +86,10 @@ class Event(utils.Container):
 
 
 class Rule(utils.Container):
+	"""
+	Represents a firewall rule.
+	"""
+
 	def __init__(self, **kwargs):
 		self.direction = None
 		self.src_ip = None
@@ -95,6 +119,10 @@ class Rule(utils.Container):
 		}
 
 	def matches(self, direction, source_ip, dest_ip, protocol, src_port, dst_port):
+		"""
+		Checks if this rule matches a set of packet details.
+		"""
+
 		# Direction
 		if self.direction != direction:
 			return False
@@ -145,6 +173,10 @@ class Rule(utils.Container):
 
 
 class Firewall(OpenFlowController):
+	"""
+	This class implements an SDN controller which acts as a firewall.
+	"""
+
 	__metaclass__ = utils.Singleton
 
 	CONFIG_FILE_PATH = 'config.yaml'
@@ -167,17 +199,29 @@ class Firewall(OpenFlowController):
 		self._log.info('Firewall started, initial mode: %s' % self._mode.name)
 
 	def set_mode(self, new_mode):
+		"""
+		Sets a new firewall working mode.
+		"""
+
 		self._log.info('Mode changed to: %s' % new_mode.name)
 		self._mode = new_mode
 		self._dump_configuration()
 		self._remove_all_flow_records()
 
 	def _remove_all_flow_records(self):
+		"""
+		Removes all active flow records from the controlled SDN switch.
+		"""
+
 		self._log.info('Removing all active flow records')
 		if self._firewall_dpid in self._switches:
 			self._switches[self._firewall_dpid].remove_flow_mod()
 
 	def add_rule(self, rule):
+		"""
+		Adds a new firewall rule to the active rules set.
+		"""
+
 		if self._mode == Mode.PassThrough:
 			raise ValueError("Can't edit rules while in passthrough mode")
 
@@ -193,6 +237,10 @@ class Firewall(OpenFlowController):
 		self._remove_all_flow_records()
 
 	def remove_rule(self, rule_number):
+		"""
+		Removes a firewall rule from the active rules set.
+		"""
+
 		if self._mode == Mode.PassThrough:
 			raise ValueError("Can't edit rules while in passthrough mode")
 
@@ -212,6 +260,10 @@ class Firewall(OpenFlowController):
 		self._remove_all_flow_records()
 
 	def edit_rule(self, rule_number, rule):
+		"""
+		Edits an exiting firewall rule.
+		"""
+
 		if self._mode == Mode.PassThrough:
 			raise ValueError("Can't edit rules while in passthrough mode")
 
@@ -233,12 +285,24 @@ class Firewall(OpenFlowController):
 		self._remove_all_flow_records()
 
 	def get_events(self, start_time, end_time):
+		"""
+		Returns a list of event details that occurred in a given time interval.
+		"""
+
 		return [event.as_dict() for event in self._events if start_time <= event.time <= end_time]
 
 	def get_total_bandwidth(self, start_time, end_time):
 		return {t: b for t, b in self._total_bandwidth.iteritems() if start_time < t < end_time}
 
 	def _handle_packet(self, event):
+		"""
+		Handles an incoming packet by checking if the current active rules
+		set allow it to be forwarded on to the other connected network.
+		If the packet is allowed to be forwarded, an forwarding rule is installed
+		in the underlying SDN switch. Otherwise, a rule which ignores this flow is installed
+		in the underlying SDN switch.
+		"""
+
 		# Ignore events that are related to other switches in the network.
 		if event.dpid != self._firewall_dpid:
 			return
@@ -269,6 +333,10 @@ class Firewall(OpenFlowController):
 		self._switches[event.dpid].add_flow_mod(action, match, buffer_id=packet_in.buffer_id, idle_timeout=self._flow_active_time_secs)
 
 	def _get_action_for_flow(self, packet, in_port):
+		"""
+		Decides and returns the action (allow/block) that should be taken on a given packet.
+		"""
+
 		# TODO: allow ICMP blocking
 		if not isinstance(packet.next, ipv4) or not (isinstance(packet.next.next, tcp) or isinstance(packet.next.next, udp)):
 			return Action.Allowed
@@ -329,6 +397,9 @@ class Firewall(OpenFlowController):
 		return action
 
 	def _handle_ConnectionUp(self, event):
+		"""
+		Handles a ConnectionUp event by starting the flow stats retrieval timer.
+		"""
 		super(Firewall, self)._handle_ConnectionUp(event)
 
 		# Ignore events that are related to other switches in the network.
@@ -372,6 +443,10 @@ class Firewall(OpenFlowController):
 		self._active_flows = event.stats
 
 	def _load_configuration(self):
+		"""
+		Loads the configuration from the configuration file.
+		"""
+
 		config = utils.load_yaml(self.CONFIG_FILE_PATH)
 		self._incoming_port = config['physical_ports']['incoming']
 		self._outgoing_port = config['physical_ports']['outgoing']
@@ -384,6 +459,10 @@ class Firewall(OpenFlowController):
 		self._whitelist_rules = [Rule(**rule_dict) for rule_dict in config['whitelist_rules']]
 
 	def _dump_configuration(self):
+		"""
+		Writes the active configuration to the configuration file.
+		"""
+
 		config = {
 			'physical_ports': {
 				'incoming': self._incoming_port,
@@ -401,6 +480,10 @@ class Firewall(OpenFlowController):
 		utils.dump_yaml(self.CONFIG_FILE_PATH, config)
 
 	def _load_events(self):
+		"""
+		Loads all events from the events file.
+		"""
+
 		try:
 			with open(self.EVENTS_FILE, 'r') as f:
 				return pickle.loads(f.read())
@@ -408,6 +491,10 @@ class Firewall(OpenFlowController):
 			return []
 
 	def _dump_events(self):
+		"""
+		Dumps all events to the events file.
+		"""
+
 		with open(self.EVENTS_FILE, 'w') as f:
 			f.write(pickle.dumps(self._events))
 
@@ -450,10 +537,18 @@ class Firewall(OpenFlowController):
 
 	@property
 	def mode(self):
+		"""
+		Returns the firewall's current work mode.
+		"""
+
 		return self._mode
 
 	@property
 	def active_rules(self):
+		"""
+		Returns the set of current active rules.
+		"""
+
 		if self._mode == Mode.BlackList:
 			return self._blacklist_rules
 		if self._mode == Mode.WhiteList:
