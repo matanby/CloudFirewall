@@ -5,10 +5,6 @@ import of_firewall
 import utils
 
 
-def get_proxy():
-	return ipc.get_proxy_by_name('firewall')
-
-
 class FirewallInterface(object):
 	__metaclass__ = utils.Singleton
 
@@ -56,7 +52,8 @@ class FirewallInterface(object):
 		return self._firewall.get_events(start_time, end_time)
 
 	def get_total_bandwidth(self, start_time, end_time):
-		return self._firewall.get_total_bandwidth(start_time, end_time)
+		total_bw = self._firewall.get_total_bandwidth(start_time, end_time)
+		return {str(k): v for k, v in total_bw.iteritems()}
 
 	def start_serve_loop(self):
 		self._server_thread.daemon = True
@@ -74,10 +71,10 @@ class FirewallInterface(object):
 		except:
 			raise ValueError('Invalid protocol: %s' % protocol)
 
-		if isinstance(src_port, str) and '-' not in src_port:
+		if isinstance(src_port, str) and '-' not in src_port and '*' not in src_port:
 			src_port = int(src_port)
 
-		if isinstance(dst_port, str) and '-' not in dst_port:
+		if isinstance(dst_port, str) and '-' not in dst_port and '*' not in dst_port:
 			dst_port = int(dst_port)
 
 		return of_firewall.Rule(
