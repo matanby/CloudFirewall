@@ -1,7 +1,7 @@
 from wtforms import StringField, PasswordField, validators
 
 
-class User():
+class User(object):
     """
     Represent user in the system
     """
@@ -14,7 +14,7 @@ class User():
     def is_authenticated(self):
         return self.authenticated
 
-    def set_authneticated(self, authenticated):
+    def set_authenticated(self, authenticated):
         self.authenticated = authenticated
 
     def is_active(self):
@@ -25,4 +25,3 @@ class User():
 
     def get_id(self):
         return unicode(self.username)
-
