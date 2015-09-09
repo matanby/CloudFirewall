@@ -1,16 +1,18 @@
 blacklist_rules:
--   direction: Incoming
-    dst_ip: 10.0.0.1
-    dst_port: '*'
+-   direction: Outgoing
+    dst_ip: '*'
+    dst_port: 5001
     protocol: TCP
-    src_ip: 10.0.0.2
-    src_port: 5001
+    src_ip: 10.0.0.1
+    src_port: '*'
 firewall_dpid: 200
 flow_active_time_secs: 60
+flow_starts_retrieval_interval_secs: 1
 mode: WhiteList
 physical_ports:
     incoming: 1
     outgoing: 2
+seconds_to_keep_bandwidth_stats: 600
 whitelist_rules:
 -   direction: Outgoing
     dst_ip: 10.0.0.2
@@ -24,9 +26,3 @@ whitelist_rules:
     protocol: TCP
     src_ip: 10.0.0.2
     src_port: 5001
--   direction: Outgoing
-    dst_ip: 111.111.111.111
-    dst_port: 1
-    protocol: UDP
-    src_ip: 222.222.222.222
-    src_port: 2
