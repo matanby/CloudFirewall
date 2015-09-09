@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html xmlns="http://www.w3.org/1999/html">
 <head lang="en">
     <meta charset="UTF-8">
     <title>Cloud Firewall</title>
     <!-- Jquqry JS -->
-    <script src="//code.jquery.com/jquery-1.11.3.min.js"></script>
+    <script src="static/js/jquery-1.11.3.min.js"></script>
     <!-- Bootstarp -->
 
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
@@ -45,67 +45,64 @@
             <div>
 
                 <form class="form-signin">
-                    <h2 class="form-signin-heading text-center">Please sign in</h2>
+                    <h2 class="form-signin-heading text-center"><font color="white">Please Sign-In</font></h2>
                     <label for="loginInputUsername" class="sr-only">Username</label>
                     <input type="text" id="loginInputUsername" class="form-control" placeholder="Username" required autofocus>
                     <label for="loginInputPassword" class="sr-only">Password</label>
                     <input type="password" id="loginInputPassword" class="form-control" placeholder="Password" required>
                 </form>
+                </br>
                 <button class="btn btn-lg btn-success btn-block">Sign in</button>
             </div>
         </div>
 
-        <div id="dashboard" class="hidden" style="margin-top: -50px;">
-            <h1 class="page-header">Dashboard</h1>
-
+        <div id="dashboard" class="hidden" style="margin-top: -40px;">
             <h2 class="sub-header">Mode: <small id="dashboardModeHeader"></small></h2>
 
-
             <div class="row" style="margin-top: 10px;">
-                <h2 class="sub-header" style="margin-left: 15px;">Statistics</h2>
-                <div class="col-xs-3">
-                    <canvas id="blocksAndAllowsPerMonth" width="400" height="180"></canvas>
+                <div class="col-xs-4">
+                    <canvas id="dataFlowStats" width="400" height="200"></canvas>
                     <h4>Data Flow</h4>
                     <span class="text-muted">Displays the data flow in the firewall<br> in each second in the last 10 minutes</span>
                 </div>
-                <div class="col-xs-3">
-                    <canvas id="blocksPerSessionByInterval" width="400" height="180"></canvas>
+
+                <div class="col-xs-4">
+                    <canvas id="blocksPerSessionByInterval" width="400" height="200"></canvas>
                     <h4>Blocks Per Sessions</h4>
                     <span class="text-muted">Total Sessions in blue<br>Blocks in gray</span>
                 </div>
-                <div class="col-xs-3">
-                    <canvas id="blocksPerProtocol" width="400" height="180"></canvas>
+                <div class="col-xs-4">
+                    <canvas id="blocksPerProtocol" width="400" height="200"></canvas>
                     <h4>Sessions Per Protocol</h4>
                     <span class="text-muted">Displays the total amount of<br> sessions opened per protocol type</span>
                 </div>
-                <div class="col-xs-3">
-                    <canvas id="sessionsPerDirection" width="400" height="180"></canvas>
-                    <h4>Sessions Per Direction</h4>
-                    <span class="text-muted">Displays the total amount of sessions<br>opened per direction (incoming\outgoing)</span>
-                </div>
             </div>
 
-            <div class="table-responsive" style="margin-top: 20px; height:200px; overflow:auto;">
-                <h2 class="sub-header">Events Table</h2>
-                <table class="table table-striped" id="dashboardEventsTable">
+            <h2 class="sub-header">Events Table</h2>
+             <table class="table" style="table-layout:fixed">
                     <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Action</th>
-                        <th>Source IP</th>
-                        <th>Source Port</th>
-                        <th>Destination IP</th>
-                        <th>Destination Port</th>
-                        <th>Time</th>
-                    </tr>
+                        <tr>
+                            <th width="7%">#</th>
+                            <th width="20%">Time</th>
+                            <th width="15%">Action</th>
+                            <th width="15%">Source IP</th>
+                            <th width="15%">Destination IP</th>
+                            <th width="15%">Protocol</th>
+                            <th width="20%">Source Port</th>
+                            <th width="20%">Destination Port</th>
+                        </tr>
                     </thead>
+              </table>
+            <div class="table-responsive" style="margin-top: -20px; height:200px; overflow:auto;">
+
+                <table class="table table-striped" id="dashboardEventsTable" style="table-layout:fixed">
                     <tbody>
                     </tbody>
                 </table>
             </div>
 
-            <div class="row" style="margin-top: 5px;">
-                <h2 class="sub-header">Logger</h2>
+            <div class="row" style="margin-top: -30px;">
+                <h2 class="sub-header" style="margin-left:15px;">Audit Log</h2>
                 <textarea id="dashboardEventslogger" class="col-xs-11" style="height: 100px;" disabled>
                 </textarea>
                 <button type="button" class="btn btn-primary col-xs-1" style="height:100px;" id="loggerClearButton">Clear Log</button>
@@ -114,7 +111,6 @@
 
         <div id="settings" class="hidden">
             <div>
-
                 <h2>Mode: <small id="settingsModeHeader"></small></h2>
                <div class="dropdown">
                    <button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
@@ -212,7 +208,7 @@
                                 <tr>
                                     <td>Source Port</td>
                                     <td><span id="editRuleOldSourcePort"></span></td>
-                                    <td><input type='number' min='0' id='editRuleNewSourcePort' placeholder='Source Port'></td>
+                                    <td><input type='text' min='0' id='editRuleNewSourcePort' placeholder='Source Port'></td>
                                 </tr>
                                 <tr>
                                     <td>Destination IP</td>
@@ -222,7 +218,7 @@
                                 <tr>
                                     <td>Destination Port</td>
                                     <td><span id="editRuleOldDestinationPort"></span></td>
-                                    <td><input type='number' min='0' id='editRuleNewDestinationPort' placeholder='Destination Port'></td>
+                                    <td><input type='text' min='0' id='editRuleNewDestinationPort' placeholder='Destination Port'></td>
                                 </tr>
                                 <tr>
                                     <td>Protocol</td>
@@ -238,7 +234,7 @@
                                 <span id="editRuleError" style="color: red;"></span><br>
                             </div>
                             <div align="center">
-                                <button class="btn btn-success" id="editConfirmationButton">Edit</button>
+                                <button class="btn btn-success" id="editConfirmationButton">Save</button>
                                 <button class="btn" id="editCloseButton">Close</button>
                             </div>
                         </div>
@@ -254,13 +250,13 @@
     <!--<script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/3.0.3/handlebars.amd.js" />-->
 
     <!-- Bootstarp JS -->
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+    <script src="static/js/bootstrap.min.js"></script>
     <!-- Chart JS -->
     <script src="static/js/Chart.js"></script>
     <!-- Masked JS -->
     <script src="static/js/jquery.maskedinput.js"></script>
     <!-- Socket.io JS -->
-    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/0.9.16/socket.io.min.js"></script>
+    <script type="text/javascript" src="static/js/socket.io.min.js"></script>
     <!-- CloudFirewall JS -->
     <script src="static/js/script.js"></script>
 </body>

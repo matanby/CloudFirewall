@@ -9,7 +9,8 @@ appLogic = {
 
     init: function () {
         this.setVars();
-        this.setEventListeners();
+
+        //definition for mask inputs for validation
         $.mask.definitions['x'] = "[0-2]";
         $.mask.definitions['y'] = "[0-5]";
     },
@@ -17,18 +18,19 @@ appLogic = {
     setVars: function () {
         //login section
         this.loginSection = document.querySelector("#login");
-        this.socket = io.connect();
-        this.socket.emit('get_events');
-    },
 
-    setEventListeners: function () {
-        this.socket.on('event_occured', function(data) {
-            appUi.render.dashboardEventsTable(data)
-        });
+        //timer intervals id's
+        appLogic.dataFlowStatsIntervalId = undefined;
+        appLogic.blocksPerSessionStatsIntervalId = undefined;
+        appLogic.protocolsStatsIntervalId = undefined;
+        appLogic.eventsTableIntervalId = undefined;
     },
 
     /* Authntication */
 
+    /**
+     * Ajax request to server to know if current user is logged in
+     */
     isAuthenticated: function(){
         $.ajax({
             url: "/isAuthenticated",
@@ -45,6 +47,9 @@ appLogic = {
         });
     },
 
+    /**
+     * Ajax request to server for logging in
+     */
     login: function(){
         if (!this.validator.validateLoginForm()){
             return;
@@ -61,17 +66,21 @@ appLogic = {
             }),
             success: function(response){
                 appLogic.getDashboard();
-                var log = "Admin has logged in"
-                appLogic.setLog(log)
+                var log = "Admin has logged in";
+                appLogic.setLog(log);
             },
             error: function (response){
                 appUi.hideLoader();
+                appUi.showError(JSON.parse(response.responseText).status)
             }
         });
     },
 
+    /**
+     * Ajax request to server for logging out
+     */
     logout: function(){
-        var that = this;
+        appUi.showLoader()
 
         $.ajax({
             url: "/logout",
@@ -83,16 +92,27 @@ appLogic = {
                 appUi.showLogin();
                 var log = "Admin has logged out"
                 appLogic.setLog(log)
+
+                //clear timer intervals for updating ui
+                clearInterval(appLogic.dataFlowStatsIntervalId);
+                clearInterval(appLogic.blocksPerSessionStatsIntervalId);
+                clearInterval(appLogic.protocolsStatsIntervalId);
+                clearInterval(appLogic.eventsTableIntervalId);
+
+                appUi.hideLoader()
             },
             error: function (data){
-                appUi.showError("You need to be logged in in order to log out")
                 appUi.showLogin()
+                appUi.hideLoader()
             }
         });
     },
 
     /* Dashboard */
 
+    /**
+     * Ajax request to server for dashboard elements data
+     */
     getDashboard: function(){
         appUi.showLoader();
         $.ajax({
@@ -111,12 +131,15 @@ appLogic = {
             },
             error: function (response){
                 appUi.hideLoader();
-                appUi.showError("You need to be logged in to access the dashboard")
+                appUi.showError(JSON.parse(response.responseText).status)
                 appUi.showLogin()
             }
         });
     },
 
+    /**
+     * Ajax request to server for events table
+     */
     getEventsTable: function (){
         $.ajax({
             url: "/events",
@@ -125,14 +148,20 @@ appLogic = {
             data: JSON.stringify({
             }),
             success: function(response){
-                appUi.render.dashboardEventsTable(response.data)
+                appUi.render.dashboardEventsTable(response.data);
+                if(appLogic.eventsTableIntervalId === undefined) {
+                    appLogic.eventsTableIntervalId = setInterval(function () {appLogic.getEventsTable()}, 10*1000);
+                }
             },
             error: function (response){
-                appUi.showError(JSON.parse(response.responseText).status)
+                appLogic.setLog(JSON.parse(response.responseText).status);
             }
         });
     },
 
+    /**
+     * Ajax request to server for firewall mode
+     */
     getMode : function(){
         $.ajax({
             url: "/mode",
@@ -145,35 +174,108 @@ appLogic = {
                 appUi.render.firewallMode(response.data)
             },
             error: function (response){
-
+                appLogic.setLog(JSON.parse(response.responseText).status);
             }
         });
     },
 
+    /**
+     * Invoke all functions for getting statistics from server
+     */
     getStats: function(){
-        appLogic.getBlocksAndAllowsStats();
+        appLogic.getDataFlowStats();
         appLogic.getBlocksPerSessionStats();
         appLogic.getProtocolStats();
-        appLogic.getSessionPerDirectionStats();
     },
 
-    getBlocksAndAllowsStats: function(){
+    /**
+     * Updates the data flow graph from current data at the firewall
+     */
+    updateDataFlowStats: function(){
         $.ajax({
-            url: "/BlocksAndAllowsStats",
+            url: "/DataFlowStats",
             type: "GET",
             contentType: 'application/json',
             data: JSON.stringify({
 
             }),
             success: function(response){
-                appUi.render.blocksAndAllowslineChart(response.data)
+                for (var i=0; i < response.data.datasets.data.length; i++){
+                    if(appUi.myLineChart.datasets[0].points[i] !== undefined &&
+                       response.data.datasets.data[i] !== undefined) {
+                        appUi.myLineChart.datasets[0].points[i].value = response.data.datasets.data[i];
+                    }
+                    else{
+                        appUi.myLineChart.datasets[0].points[i].value = 0;
+                    }
+                }
+                if(appUi.myLineChart.scale.xLabels !== undefined && response.data.labels !== undefined){
+                    appUi.myLineChart.scale.xLabels = response.data.labels;
+                }
+                appUi.myLineChart.update();
             },
             error: function (response){
-
+                appLogic.setLog(JSON.parse(response.responseText).status);
             }
         });
     },
 
+    /**
+     * Retrieve the data flow graph data from the firewall
+     */
+    getDataFlowStats: function(){
+        $.ajax({
+            url: "/DataFlowStats",
+            type: "GET",
+            contentType: 'application/json',
+            data: JSON.stringify({
+
+            }),
+            success: function(response){
+                appUi.render.dataFlowStatsChart(response.data)
+                if (appLogic.dataFlowStatsIntervalId === undefined){
+                    appLogic.dataFlowStatsIntervalId = setInterval(function () {appLogic.updateDataFlowStats()}, 1*1000);
+                }
+            },
+            error: function (response){
+                appLogic.setLog(JSON.parse(response.responseText).status);
+            }
+        });
+    },
+
+    /**
+     * Updates the blocks per session graph from current data at the firewall
+     */
+    updateBlocksPerSessionStats: function(){
+        $.ajax({
+            url: "/BlocksPerSessionByIntervalStats",
+            type: "GET",
+            contentType: 'application/json',
+            data: JSON.stringify({
+
+            }),
+            success: function(response){
+                for (var i=0; i < response.data.datasets.sessions.length; i++){
+                    if (appUi.myBarChart.datasets[0].bars[i] !== undefined && response.data.datasets.sessions[i] !== undefined
+                        && appUi.myBarChart.datasets[1].bars[i] !== undefined && response.data.datasets.blocks[i] !== undefined){
+                        appUi.myBarChart.datasets[0].bars[i].value = response.data.datasets.sessions[i];
+                        appUi.myBarChart.datasets[1].bars[i].value = response.data.datasets.blocks[i];
+                    }
+                    else{
+                        break;
+                    }
+                }
+                appUi.myBarChart.update();
+            },
+            error: function (response){
+                appLogic.setLog(JSON.parse(response.responseText).status);
+            }
+        });
+    },
+
+    /**
+     * Retrieve the blocks per session graph data from the firewall
+     */
     getBlocksPerSessionStats: function(){
         $.ajax({
             url: "/BlocksPerSessionByIntervalStats",
@@ -184,13 +286,19 @@ appLogic = {
             }),
             success: function(response){
                 appUi.render.blocksPerSessionByIntervalBarChart(response.data)
+                if (appLogic.blocksPerSessionStatsIntervalId === undefined){
+                    appLogic.blocksPerSessionStatsIntervalId = setInterval(function () {appLogic.updateBlocksPerSessionStats()}, 60*1000);
+                }
             },
             error: function (response){
-
+                appLogic.setLog(JSON.parse(response.responseText).status);
             }
         });
     },
 
+    /**
+     * Retrieve the sessions per protocol graph data from the firewall
+     */
     getProtocolStats: function(){
         $.ajax({
             url: "/ProtocolStats",
@@ -200,30 +308,18 @@ appLogic = {
 
             }),
             success: function(response){
-                appUi.render.ProtocolPieChart(response.data)
+                appUi.render.ProtocolPieChart(response.data);
+                if (appLogic.protocolsStatsIntervalId === undefined){
+                    appLogic.protocolsStatsIntervalId = setInterval(function () {appLogic.getProtocolStats()}, 10*1000);
+                }
+
             },
             error: function (response){
-
+                appLogic.setLog(JSON.parse(response.responseText).status);
             }
         });
     },
 
-    getSessionPerDirectionStats: function(){
-        $.ajax({
-            url: "/SessionsPerDirectionStats",
-            type: "GET",
-            contentType: 'application/json',
-            data: JSON.stringify({
-
-            }),
-            success: function(response){
-                appUi.render.sessionsPerDirectionPieChart(response.data)
-            },
-            error: function (response){
-
-            }
-        });
-    },
 
     getLogs: function(){
         return JSON.parse(localStorgae.getItem('log'))
@@ -272,7 +368,7 @@ appLogic = {
             },
             error: function (response){
                 appUi.hideLoader();
-                appUi.showError("You need to be logged in to access the settings")
+                appUi.showError(JSON.parse(response.responseText).status);
                 appUi.showLogin()
             }
         });
@@ -293,7 +389,8 @@ appLogic = {
                 appLogic.setLog(log)
             },
             error: function (response){
-
+                appUi.showError(JSON.parse(response.responseText).status);
+                appLogic.setLog(JSON.parse(response.responseText).status);
             }
         });
     },
@@ -310,7 +407,7 @@ appLogic = {
                 appUi.render.rulesTable(response.data)
             },
             error: function (response){
-
+                appUi.showError(JSON.parse(response.responseText).status);
             }
         });
     },
@@ -346,7 +443,8 @@ appLogic = {
                 appLogic.setLog(log)
             },
             error: function (response){
-
+                appUi.showError(JSON.parse(response.responseText).status);
+                appLogic.setLog(JSON.parse(response.responseText).status);
             }
         });
     },
@@ -389,7 +487,7 @@ appLogic = {
                 appUi.hideLoader()
                 appUi.hideEditRuleModal()
                 appUi.showError(JSON.parse(response.responseText).status)
-
+                appLogic.setLog(JSON.parse(response.responseText).status);
             }
         });
     },
@@ -407,33 +505,18 @@ appLogic = {
                 appLogic.getSettings()
                 var log = "Deleted The next rule from firewall: " +
                     "Direction: " + response.data.direction + ", " +
-                    "Source IP: " + response.data.sourceIp + ", " +
-                    "Source Port: " + response.data.sourcePort + ", " +
-                    "Destination IP: " + response.data.destinationIp + ", " +
-                    "Destination Port: " + response.data.destinationPort + ", " +
+                    "Source IP: " + response.data.src_ip + ", " +
+                    "Source Port: " + response.data.src_port + ", " +
+                    "Destination IP: " + response.data.dst_ip + ", " +
+                    "Destination Port: " + response.data.dst_port + ", " +
                     "Protocol: " + response.data.protocol;
                 appLogic.setLog(log)
                 appUi.hideLoader()
             },
             error: function (response){
-                appUi.hideLoader()
-                appUi.showError(JSON.parse(response.responseText).status)
-            }
-        });
-    },
-
-    getProtocols: function(){
-        $.ajax({
-            url: "/protocols",
-            type: "GET",
-            contentType: 'application/json',
-            data: JSON.stringify({
-            }),
-            success: function(response){
-                appUi.render.ruleFormsProtocols(response.data)
-            },
-            error: function (response){
-
+                appUi.hideLoader();
+                appUi.showError(JSON.parse(response.responseText).status);
+                appLogic.setLog(JSON.parse(response.responseText).status);
             }
         });
     },
@@ -449,18 +532,18 @@ appLogic = {
         },
 
         validateAddRuleForm: function(){
-            if ($("#addRuleDirection").val().length == 0 ||
-                $("#addRuleSourceIp").val().length == 0 ||
-                $("#addRuleSourcePort").val().length == 0 ||
-                $("#addRuleDestinationIp").val().length == 0 ||
-                $("#addRuleDestinationPort").val().length == 0 ||
-                $("#addRuleProtocol").val().length == 0){
-                return "Cannot add new rule with empty fileds";
-            }
-            else if ($("#addRuleSourcePort").val() > 65535 || $("#addRuleSourcePort").val() < 0 ||
-                $("#addRuleDestinationPort").val() > 65535 || $("#addRuleDestinationPort").val() < 0){
-                return "Port must be in range 0 - 65535"
-            }
+            //if ($("#addRuleDirection").val().length == 0 ||
+            //    $("#addRuleSourceIp").val().length == 0 ||
+            //    $("#addRuleSourcePort").val().length == 0 ||
+            //    $("#addRuleDestinationIp").val().length == 0 ||
+            //    $("#addRuleDestinationPort").val().length == 0 ||
+            //    $("#addRuleProtocol").val().length == 0){
+            //    return "Cannot add new rule with empty fileds";
+            //}
+            //else if ($("#addRuleSourcePort").val() > 65535 || $("#addRuleSourcePort").val() < 0 ||
+            //    $("#addRuleDestinationPort").val() > 65535 || $("#addRuleDestinationPort").val() < 0){
+            //    return "Port must be in range 0 - 65535"
+            //}
             return 1;
         },
 
@@ -490,6 +573,7 @@ appUi = {
     init: function () {
         this.setVars();
         this.setEventListeners();
+        Chart.defaults.global.responsive = true;
     },
 
     setVars: function () {
@@ -501,7 +585,12 @@ appUi = {
         //templates
         this.errorModal = $("#errorModal");
         this.loadingModal = $("#loadingModal");
-        this.editRuleModal = $("#editRuleModal")
+        this.editRuleModal = $("#editRuleModal");
+
+        //graphs
+        this.myLineChart;
+        this.myBarChart;
+        this.myPieChart;
     },
 
     setEventListeners: function () {
@@ -544,7 +633,6 @@ appUi = {
     showDashboard: function(){
         this.hideAllSections();
         this.dashboardSection.removeClass('hidden');
-        appUi.test();
     },
 
     hideDashboard: function(){
@@ -606,8 +694,8 @@ appUi = {
         $("#editRuleOldProtocol").html(protocol)
         $("#editRuleNewProtocol").val(protocol)
 
-        $("#editRuleNewSourceIp").mask("xyy.xyy.xyy.xyy",{placeholder:"xxx.xxx.xxx.xxx"});
-        $("#editRuleNewDestinationIp").mask("xyy.xyy.xyy.xyy",{placeholder:"xxx.xxx.xxx.xxx"});
+        //$("#editRuleNewSourceIp").mask("xyy.xyy.xyy.xyy",{placeholder:"xxx.xxx.xxx.xxx"});
+        //$("#editRuleNewDestinationIp").mask("xyy.xyy.xyy.xyy",{placeholder:"xxx.xxx.xxx.xxx"});
 
         this.editRuleModal.modal();
     },
@@ -623,16 +711,23 @@ appUi = {
         this.hideSettings();
     },
 
-    getRandomColor: function() {
+    getRandomColor: function(num) {
         var letters = '0123456789ABCDEF'.split('');
         var color = '#';
         for (var i = 0; i < 6; i++ ) {
-            color += letters[Math.floor(Math.random() * 16)];
+            color += letters[Math.floor((1/num) * 16)];
         }
         return color;
     },
 
+    /**
+     * Render Obejct to render UI elements.
+     */
     render: {
+        /**
+         * Render firewall mode title
+         * @param mode - The string mode to display
+         */
         firewallMode: function(mode){
             $("#settingsModeHeader").html(mode)
             $("#dashboardModeHeader").html(mode)
@@ -644,6 +739,10 @@ appUi = {
             }
         },
 
+        /**
+         * Render firewall rules table
+         * @param mode - The rules table to display
+         */
         rulesTable: function(rules, protocols){
             var dashboardTableBody = $('#settingsTableRules tbody');
             dashboardTableBody.empty();
@@ -671,15 +770,16 @@ appUi = {
                                 "<option value='Incoming'>Incoming</option>" +
                                 "<option value='Outgoing'>Outgoing</option></select></td>" +
                             "<td><input type='text' id='addRuleSourceIp' placeholder='Source IP'></td>" +
-                            "<td><input type='number' min='0' id='addRuleSourcePort' placeholder='Source Port'></td>" +
+                            "<td><input type='text' min='0' id='addRuleSourcePort' placeholder='Source Port'></td>" +
                             "<td><input type='text' id='addRuleDestinationIp' placeholder='Destination IP'></td>" +
-                            "<td><input type='number' min='0' id='addRuleDestinationPort' placeholder='Destination Port'></td>" +
+                            "<td><input type='text' min='0' id='addRuleDestinationPort' placeholder='Destination Port'></td>" +
                             "<td><select id='addRuleProtocol'><option value='TCP/UDP'>TCP/UDP</option>" +
                                 "<option value='TCP'>TCP<option value='UDP'>UDP</select></td>" +
                         "</tr>");
             //appLogic.getProtocols()
-            $("#addRuleSourceIp").mask("xyy.xyy.xyy.xyy",{placeholder:"xxx.xxx.xxx.xxx"});
-            $("#addRuleDestinationIp").mask("xyy.xyy.xyy.xyy",{placeholder:"xxx.xxx.xxx.xxx"});
+            //$("#addRuleSourceIp").mask("9?99.9?99.9?99.9?99", {placeholder:" "});
+            //$("#addRuleSourceIp").mask("xyy.xyy.xyy.xyy",{placeholder:"xxx.xxx.xxx.xxx"});
+            //$("#addRuleDestinationIp").mask("xyy.xyy.xyy.xyy",{placeholder:"xxx.xxx.xxx.xxx"});
             $("#addRuleButton").get(0).addEventListener("click", appLogic.addRule.bind(appLogic));
 
             var deleteButtons = $(".deleteRuleButton")
@@ -705,16 +805,6 @@ appUi = {
             appUi.showEditRuleModal(direction, sourceIp, sourcePort, destinationIp, destinationPort, protocol);
         },
 
-        ruleFormsProtocols: function(protocols){
-            //var optionsStr = "";
-            //
-            //for(var k = 0; k < protocols.length; k++){
-            //    optionsStr += "<option value='" + protocols[k] + "'>" + protocols[k] + "</option>";
-            //}
-            //
-            //$("#addRuleProtocol").html(optionsStr)
-            //$("#editRuleNewProtocol").html(optionsStr)
-        },
 
         dashboard: function (tableData) {
             this.dashboardEventsTable(tableData);
@@ -727,23 +817,29 @@ appUi = {
         dashboardEventsTable: function(tableData){
             var dashboardTableBody = $('#dashboardEventsTable tbody');
             dashboardTableBody.empty();
-            for(var i = 0; i < tableData.length; i++){
+            for(var i = tableData.length - 1; i > -1 ; i--){
                 var j = 0;
-                    dashboardTableBody.append(
+                actionColor = (tableData[i].action === "Allowed") ? "green" : "red";
+                dashboardTableBody.append(
                     "<tr>" +
-                        "<td>" + i + "</td>" +
-                        "<td>" + tableData[i].action + "</td>" +
-                        "<td>" + tableData[i].src_ip + "</td>" +
-                        "<td>" + tableData[i].src_port + "</td>" +
-                        "<td>" + tableData[i].dst_ip + "</td>" +
-                        "<td>" + tableData[i].dst_port + "</td>" +
-                        "<td>" + tableData[i].time + "</td>" +
+                        "<td width='7%'>" + (tableData.length - i) + "</td>" +
+                        "<td width='20%'>" + tableData[i].time + "</td>" +
+                        "<td width='15%'><font color=" + actionColor + ">" + tableData[i].action + "</font></td>" +
+                        "<td width='15%'>" + tableData[i].src_ip + "</td>" +
+                        "<td width='15%'>" + tableData[i].dst_ip + "</td>" +
+                        "<td width='15%'>" + tableData[i].protocol + "</td>" +
+                        "<td width='20%'>" + tableData[i].src_port + "</td>" +
+                        "<td width='20%'>" + tableData[i].dst_port + "</td>" +
                     "</tr>");
             }
         },
 
-        blocksAndAllowslineChart: function(data){
-            var ctx = $("#blocksAndAllowsPerMonth").get(0).getContext("2d");
+        /**
+         * Render line graph with data flow statistics
+         * @param data - The data flow per second from firewall
+         */
+        dataFlowStatsChart: function(data){
+            var ctx = $("#dataFlowStats").get(0).getContext("2d");
             var options = {
                 ///Boolean - Whether grid lines are shown across the chart
                 scaleShowGridLines : true,
@@ -767,7 +863,7 @@ appUi = {
                 bezierCurveTension : 0.4,
 
                 //Boolean - Whether to show a dot for each point
-                pointDot : true,
+                pointDot : false,
 
                 //Number - Radius of each point dot in pixels
                 pointDotRadius : 4,
@@ -779,7 +875,7 @@ appUi = {
                 pointHitDetectionRadius : 20,
 
                 //Boolean - Whether to show a stroke for datasets
-                datasetStroke : true,
+                datasetStroke : false,
 
                 //Number - Pixel width of dataset stroke
                 datasetStrokeWidth : 2,
@@ -787,38 +883,33 @@ appUi = {
                 //Boolean - Whether to fill the dataset with a colour
                 datasetFill : true,
 
+                showTooltips: false,
+
                 //String - A legend template
                 legendTemplate : "<ul class=\"<%=name.toLowerCase()%>-legend\"><% for (var i=0; i<datasets.length; i++){%><li><span style=\"background-color:<%=datasets[i].strokeColor%>\"></span><%if(datasets[i].label){%><%=datasets[i].label%><%}%></li><%}%></ul>"
-
             };
             var lineChartData = {
                 datasets: [
                     {
-                        label: "Allows",
+                        label: "Data",
                         fillColor: "rgba(220,220,220,0.2)",
                         strokeColor: "rgba(220,220,220,1)",
                         pointColor: "rgba(220,220,220,1)",
                         pointStrokeColor: "#fff",
                         pointHighlightFill: "#fff",
                         pointHighlightStroke: "rgba(220,220,220,1)",
-                    },
-                    {
-                        label: "Blocks",
-                        fillColor: "rgba(151,187,205,0.2)",
-                        strokeColor: "rgba(151,187,205,1)",
-                        pointColor: "rgba(151,187,205,1)",
-                        pointStrokeColor: "#fff",
-                        pointHighlightFill: "#fff",
-                        pointHighlightStroke: "rgba(151,187,205,1)",
                     }
                 ]
             };
             lineChartData.labels = data.labels;
-            lineChartData.datasets[0].data = data.datasets.allows;
-            lineChartData.datasets[1].data = data.datasets.blocks;
-            var myLineChart = new Chart(ctx).Line(lineChartData, options);
+            lineChartData.datasets[0].data = data.datasets.data;
+            appUi.myLineChart = new Chart(ctx).Line(lineChartData, options);
         },
 
+        /**
+         * Render bars chart with blocks per sesssions statistics
+         * @param data - The blocks per sessions data from firewall
+         */
         blocksPerSessionByIntervalBarChart: function(data){
             var ctx = $("#blocksPerSessionByInterval").get(0).getContext("2d");
             var options = {
@@ -877,7 +968,7 @@ appUi = {
             barChartData.labels = data.labels;
             barChartData.datasets[0].data = data.datasets.sessions;
             barChartData.datasets[1].data = data.datasets.blocks;
-            var myBarChart = new Chart(ctx).Bar(barChartData, options);
+            appUi.myBarChart = new Chart(ctx).Bar(barChartData, options);
         },
 
         radarChart: function(data){
@@ -944,6 +1035,10 @@ appUi = {
         },
 
 
+        /**
+         * Render pie chart with protocols statistics
+         * @param data - The protocols data from firewall
+         */
         ProtocolPieChart: function(data){
             var options = {
                 //Boolean - Whether we should show a stroke on each segment
@@ -965,7 +1060,7 @@ appUi = {
                 animationEasing : "easeOutBounce",
 
                 //Boolean - Whether we animate the rotation of the Doughnut
-                animateRotate : true,
+                animateRotate : false,
 
                 //Boolean - Whether we animate scaling the Doughnut from the centre
                 animateScale : false,
@@ -976,71 +1071,26 @@ appUi = {
             }
             var ctx = $("#blocksPerProtocol").get(0).getContext("2d");
             var pieChartData = []
+            var sliceIndex = 0;
 
             for (protocol in data){
-                color = appUi.getRandomColor();
+                color = parseInt("F7464A", 16) - sliceIndex*15000;
+                //color = appUi.getRandomColor(sliceIndex);
                 slice = {
                     value: data[protocol],
-                    color: color, //"#F7464A"
-                    highlight: color,
+                    color: '#' + color.toString(16),
                     label: protocol
                 }
                 pieChartData.push(slice)
+                sliceIndex += 1;
             }
-            var myPieChart = new Chart(ctx).Pie(pieChartData,options);
+            appUi.myPieChart = new Chart(ctx).Pie(pieChartData,options);
         },
 
-        sessionsPerDirectionPieChart: function(data){
-            var options = {
-                //Boolean - Whether we should show a stroke on each segment
-                segmentShowStroke : true,
-
-                //String - The colour of each segment stroke
-                segmentStrokeColor : "#fff",
-
-                //Number - The width of each segment stroke
-                segmentStrokeWidth : 2,
-
-                //Number - The percentage of the chart that we cut out of the middle
-                percentageInnerCutout : 50, // This is 0 for Pie charts
-
-                //Number - Amount of animation steps
-                animationSteps : 100,
-
-                //String - Animation easing effect
-                animationEasing : "easeOutBounce",
-
-                //Boolean - Whether we animate the rotation of the Doughnut
-                animateRotate : true,
-
-                //Boolean - Whether we animate scaling the Doughnut from the centre
-                animateScale : false,
-
-                //String - A legend template
-                legendTemplate : "<ul class=\"<%=name.toLowerCase()%>-legend\"><% for (var i=0; i<segments.length; i++){%><li><span style=\"background-color:<%=segments[i].fillColor%>\"></span><%if(segments[i].label){%><%=segments[i].label%><%}%></li><%}%></ul>"
-
-            }
-            var ctx = $("#sessionsPerDirection").get(0).getContext("2d");
-            incomingColor = appUi.getRandomColor();
-            outgoingColor = appUi.getRandomColor();
-
-            var pieChartData = [
-                {
-                    value: data.Incoming,
-                    color:incomingColor,
-                    highlight: incomingColor,
-                    label: "Incoming"
-                },
-                {
-                    value: data.Outgoing,
-                    color: outgoingColor,
-                    highlight: outgoingColor,
-                    label: "Outgoing"
-                }
-            ]
-            var myPieChart = new Chart(ctx).Pie(pieChartData,options);
-        },
-
+        /**
+         * Render the dashboard logger with list of events given
+         * @param events
+         */
         dashboardLogger: function(events){
             logger = $('#dashboardEventslogger');
             logger.val("");
@@ -1059,112 +1109,6 @@ appUi = {
             var textarea = document.getElementById('dashboardEventslogger');
             textarea.scrollTop = textarea.scrollHeight;
         }
-    },
-
-    test: function () {
-
-        var rules = [{src: "255.255.255.255", dst: "255.255.255.255", srcPort: "80", dstPort: "80", protocol: "HTTP"}];
-        //appUi.render.settings(true, "White List", rules);
-        //appUi.render.rulesTable(rules)
-
-        //eventsTableData = [["Placeholder", "Placeholder", "Placeholder", "Placeholder"], ["Placeholder", "Placeholder", "Placeholder", "Placeholder"], ["Placeholder", "Placeholder", "Placeholder", "Placeholder"]];
-        //appUi.render.dashboardEventsTable(eventsTableData)
-
-        //events = [{time: "22:10", event: "Some event"}, {time: "10:20", event: "Error occured"}, {time: "14:17", event: "testing the function"}]
-        //appUi.render.dashboardLogger(events)
-
-
-        var lineChartData = {
-                labels: ["January", "February", "March", "April", "May", "June", "July"],
-                datasets: [
-                    {
-                        label: "My First dataset",
-                        fillColor: "rgba(220,220,220,0.2)",
-                        strokeColor: "rgba(220,220,220,1)",
-                        pointColor: "rgba(220,220,220,1)",
-                        pointStrokeColor: "#fff",
-                        pointHighlightFill: "#fff",
-                        pointHighlightStroke: "rgba(220,220,220,1)",
-                        data: [65, 59, 80, 81, 56, 55, 40]
-                    },
-                    {
-                        label: "My Second dataset",
-                        fillColor: "rgba(151,187,205,0.2)",
-                        strokeColor: "rgba(151,187,205,1)",
-                        pointColor: "rgba(151,187,205,1)",
-                        pointStrokeColor: "#fff",
-                        pointHighlightFill: "#fff",
-                        pointHighlightStroke: "rgba(151,187,205,1)",
-                        data: [28, 48, 40, 19, 86, 27, 90]
-                    }
-                ]
-            };
-        var barChartData = {
-            labels: ["January", "February", "March", "April", "May", "June", "July"],
-            datasets: [
-                {
-                    label: "My First dataset",
-                    fillColor: "rgba(220,220,220,0.5)",
-                    strokeColor: "rgba(220,220,220,0.8)",
-                    highlightFill: "rgba(220,220,220,0.75)",
-                    highlightStroke: "rgba(220,220,220,1)",
-                    data: [65, 59, 80, 81, 56, 55, 40]
-                },
-                {
-                    label: "My Second dataset",
-                    fillColor: "rgba(151,187,205,0.5)",
-                    strokeColor: "rgba(151,187,205,0.8)",
-                    highlightFill: "rgba(151,187,205,0.75)",
-                    highlightStroke: "rgba(151,187,205,1)",
-                    data: [28, 48, 40, 19, 86, 27, 90]
-                }
-            ]
-        };
-        var radarCharData = {
-                labels: ["Eating", "Drinking", "Sleeping", "Designing", "Coding", "Cycling", "Running"],
-                datasets: [
-                    {
-                        label: "My First dataset",
-                        fillColor: "rgba(220,220,220,0.2)",
-                        strokeColor: "rgba(220,220,220,1)",
-                        pointColor: "rgba(220,220,220,1)",
-                        pointStrokeColor: "#fff",
-                        pointHighlightFill: "#fff",
-                        pointHighlightStroke: "rgba(220,220,220,1)",
-                        data: [65, 59, 90, 81, 56, 55, 40]
-                    },
-                    {
-                        label: "My Second dataset",
-                        fillColor: "rgba(151,187,205,0.2)",
-                        strokeColor: "rgba(151,187,205,1)",
-                        pointColor: "rgba(151,187,205,1)",
-                        pointStrokeColor: "#fff",
-                        pointHighlightFill: "#fff",
-                        pointHighlightStroke: "rgba(151,187,205,1)",
-                        data: [28, 48, 40, 19, 96, 27, 100]
-                    }
-                ]
-            };
-        var pieChartData = [
-                {
-                    value: 300,
-                    color:"#F7464A",
-                    highlight: "#FF5A5E",
-                    label: "Red"
-                },
-                {
-                    value: 50,
-                    color: "#46BFBD",
-                    highlight: "#5AD3D1",
-                    label: "Green"
-                },
-                {
-                    value: 100,
-                    color: "#FDB45C",
-                    highlight: "#FFC870",
-                    label: "Yellow"
-                }
-            ]
     }
 }
 

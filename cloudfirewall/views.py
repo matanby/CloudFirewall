@@ -18,7 +18,6 @@ from flask.ext.login import (
 )
 
 import wtforms_json
-# from flask.ext.socketio import SocketIO
 
 from cloudfirewall.models import User
 from cloudfirewall.forms import LoginForm
@@ -33,9 +32,6 @@ app.config.from_object('config')
 
 # Init WTForms-JSON to allow populating WTForms from JSON content.
 wtforms_json.init()
-
-# Init web sockets framework
-# socketio = SocketIO(app)
 
 # Init the login manager and the admin user
 login_manager = LoginManager()
@@ -101,7 +97,7 @@ def login():
 	"""
 	
 	if current_user.is_authenticated():
-		return success('User logged in successfully', 200)
+		return success('Admin logged in successfully', 200)
 
 	# Validate client-side form data.
 	form = LoginForm.from_json(request.json)
@@ -109,8 +105,7 @@ def login():
 		# Login and validate the user.
 		login_user(admin)
 		admin.set_authenticated(True)
-		events_updater()
-		return success('User logged in successfully', 200)
+		return success('Admin logged in successfully', 200)
 
 	return fail('Invalid username or password', 500)
 
@@ -171,7 +166,7 @@ def set_mode():
 	try:
 		mode = request.get_json()['mode']
 		firewall.set_mode(mode)
-		return success('Firewall Mode retrieved successfully', 200, mode)
+		return success('Firewall mode changed successfully', 200, mode)
 
 	except Exception, e:
 		return fail('Could not change firewall mode. Error: %s' % e)
@@ -181,14 +176,14 @@ def set_mode():
 @login_required
 def get_rules():
 	"""
-	Returns the firewall's current rules table.
+	Returns the firewall's current rules set.
 	"""
 
 	try:
-		return success('Rules table retrieved successfully', 200, firewall.get_active_rules())
+		return success('Rules set retrieved successfully', 200, firewall.get_active_rules())
 
 	except Exception, e:
-		return fail('Could not retrieve firewall rules table. Error: %s' % e)
+		return fail('Could not retrieve firewall rules set. Error: %s' % e)
 
 
 @app.route('/rules', methods=['POST'])
@@ -232,10 +227,10 @@ def edit_rule():
 		dst_port = rule['newDestinationPort']
 
 		firewall.edit_rule(rule_number, direction, src_ip, dst_ip, protocol, src_port, dst_port)
-		return success('Rule data changed successfully', 200, rule)
+		return success('Rule changed successfully', 200, rule)
 
 	except Exception, e:
-		return fail('Could not edit rule. Error: %s' % e)
+		return fail('Could not change rule. Error: %s' % e)
 
 
 @app.route('/rules', methods=['DELETE'])
@@ -247,41 +242,33 @@ def delete_rule():
 
 	try:
 		rule_num = request.get_json()["id"] - 1
-		firewall.delete_rule(rule_num)
-		return success('Rule deleted successfully', 200, rule_num)
+		deleted_rule = firewall.delete_rule(rule_num)
+		return success('Rule deleted successfully', 200, deleted_rule)
 
 	except Exception, e:
 		return fail('Could not delete the rule from firewall. Error: %s' % e)
 
-# TODO: remove this?
-# @socketio.on('get_events')
-# @login_required
-# def handle_message():
-# 	print "user connected to get events socket"
 
-
-# TODO: remove this?
-def events_updater():
-	import threading
-	threading.Timer(50000.0, events_updater).start()
-	# socketio.emit('event_occured', firewall.get_events())
-	print "data sent."
-
-
-@app.route('/BlocksAndAllowsStats', methods=['GET'])
+@app.route('/DataFlowStats', methods=['GET'])
 @login_required
-def get_blocks_and_allows_stats():
-	# TODO: get data from firewall
-	line_chart_data = {
-		"labels": ["", "", "", "", "", "", "", "", "", "", "", ""],
-		"datasets": {
-			"allows": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			"blocks": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-		}
-	}
+def get_fw_data_stats():
+	try:
+		data = firewall.get_total_bandwidth(time.time() - 1 * 60, time.time())
+		labels = [time.ctime(float(t)).split()[3] if (int(float(t)) % 10 == 0) else " " for t in sorted(data.keys())]
+		values = [v for k, v in sorted(data.iteritems())]
 
-	# TODO: return failure in the relevant cases
-	return success('Stats table retrieved successfully', 200, line_chart_data)
+		line_chart_data = {
+			"labels": labels,
+			"datasets": {
+				"data": values
+			}
+		}
+
+		return success('Data flow stats table retrieved successfully', 200, line_chart_data)
+
+	except Exception, e:
+		print e
+		return fail('Data flow stats table could not be retrived')
 
 
 @app.route('/BlocksPerSessionByIntervalStats', methods=['GET'])
@@ -301,7 +288,7 @@ def get_blocks_per_session_by_interval():
 		for event in last_10_mins_events:
 			event_time_mins = int(event["time"]) / 60
 			ten_mins_ago_time = time.time() - 10 * 60
-			time_interval = event_time_mins - (int(ten_mins_ago_time) / 60)
+			time_interval = event_time_mins - (int(ten_mins_ago_time) / 60) - 1
 			bar_chart_data['datasets']['sessions'][time_interval] += 1
 
 			if event['action'] == 'Blocked':
