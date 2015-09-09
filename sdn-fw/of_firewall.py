@@ -393,7 +393,7 @@ class Firewall(OpenFlowController):
 			},
 			'mode': self._mode.name,
 			'flow_active_time_secs': self._flow_active_time_secs,
-			'seconds_to_keep_bandwidth_stats': self._time_to_keep_stats_secs,
+			'time_to_keep_stats_secs': self._time_to_keep_stats_secs,
 			'flow_starts_retrieval_interval_secs': self._flow_starts_retrieval_interval_secs,
 			'firewall_dpid': self._firewall_dpid,
 			'blacklist_rules': [rule.as_dict() for rule in self._blacklist_rules],

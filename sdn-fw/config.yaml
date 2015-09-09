@@ -12,7 +12,7 @@ mode: WhiteList
 physical_ports:
     incoming: 1
     outgoing: 2
-seconds_to_keep_bandwidth_stats: 600
+time_to_keep_stats_secs: 600
 whitelist_rules:
 -   direction: Outgoing
     dst_ip: 10.0.0.2
