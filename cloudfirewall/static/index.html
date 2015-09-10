@@ -45,7 +45,7 @@
             <div>
 
                 <form class="form-signin">
-                    <h2 class="form-signin-heading text-center"><font color="white">Please Sign-In</font></h2>
+                    <h2 class="form-signin-heading text-center"><font color="white">Please sign-in</font></h2>
                     <label for="loginInputUsername" class="sr-only">Username</label>
                     <input type="text" id="loginInputUsername" class="form-control" placeholder="Username" required autofocus>
                     <label for="loginInputPassword" class="sr-only">Password</label>
@@ -57,24 +57,24 @@
         </div>
 
         <div id="dashboard" class="hidden" style="margin-top: -40px;">
-            <h2 class="sub-header">Mode: <small id="dashboardModeHeader"></small></h2>
+            <h2 class="sub-header">Mode: <small id="dashboardModeHeader" style="font-size:25px; color: coral"></small></h2>
 
             <div class="row" style="margin-top: 10px;">
                 <div class="col-xs-4">
                     <canvas id="dataFlowStats" width="400" height="200"></canvas>
-                    <h4>Data Flow</h4>
-                    <span class="text-muted">Displays the data flow in the firewall<br> in each second in the last 10 minutes</span>
+                    <h4>Traffic Bandwidth</h4>
+                    <span class="text-muted">Displays traffic bandwidth passed through the firewall<br> the last minute.</span>
                 </div>
 
                 <div class="col-xs-4">
                     <canvas id="blocksPerSessionByInterval" width="400" height="200"></canvas>
-                    <h4>Blocks Per Sessions</h4>
-                    <span class="text-muted">Total Sessions in blue<br>Blocks in gray</span>
+                    <h4>Allowed and Blocked Sessions</h4>
+                    <span class="text-muted">Displays the total number of allowed and blocked sessions in the last 10 minites.<br>Allowed sessions in blue<br>Blocked sessions in gray</span>
                 </div>
                 <div class="col-xs-4">
                     <canvas id="blocksPerProtocol" width="400" height="200"></canvas>
                     <h4>Sessions Per Protocol</h4>
-                    <span class="text-muted">Displays the total amount of<br> sessions opened per protocol type</span>
+                    <span class="text-muted">Displays the total amount of<br> recieved sessions per protocol type.</span>
                 </div>
             </div>
 
@@ -82,14 +82,15 @@
              <table class="table" style="table-layout:fixed">
                     <thead>
                         <tr>
-                            <th width="7%">#</th>
-                            <th width="20%">Time</th>
-                            <th width="15%">Action</th>
+                            <th width="2%">#</th>
+                            <th width="15%">Time</th>
+                            <th width="10%">Action</th>
+                            <th width="10%">Direction</th>
                             <th width="15%">Source IP</th>
                             <th width="15%">Destination IP</th>
-                            <th width="15%">Protocol</th>
-                            <th width="20%">Source Port</th>
-                            <th width="20%">Destination Port</th>
+                            <th width="10%">Protocol</th>
+                            <th width="15%">Source Port</th>
+                            <th width="15%">Destination Port</th>
                         </tr>
                     </thead>
               </table>
@@ -102,6 +103,7 @@
             </div>
 
             <div class="row" style="margin-top: -30px;">
+                <br><br>
                 <h2 class="sub-header" style="margin-left:15px;">Audit Log</h2>
                 <textarea id="dashboardEventslogger" class="col-xs-11" style="height: 100px;" disabled>
                 </textarea>
@@ -111,16 +113,16 @@
 
         <div id="settings" class="hidden">
             <div>
-                <h2>Mode: <small id="settingsModeHeader"></small></h2>
+                <h2>Mode: <small id="settingsModeHeader" style="font-size:25px; color: coral"></small></h2>
                <div class="dropdown">
                    <button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
                        Change Mode
                        <span class="caret"></span>
                     </button>
                     <ul class="dropdown-menu dropdown-toggle" aria-labelledby="dropdownMenu1" id="setFirewallMode">
-                        <li><a href="#">WhiteList</a></li>
-                        <li><a href="#">BlackList</a></li>
-                        <li><a href="#">PassThrough</a></li>
+                        <li title="Blocks all traffic but the traffic that matches a given set of rules"><a href="#">WhiteList</a></li>
+                        <li title="Allows all traffic but the traffic that matches a given set of rules"><a href="#">BlackList</a></li>
+                        <li title="Allows all traffic"><a href="#">PassThrough</a></li>
                     </ul>
                 </div>
 

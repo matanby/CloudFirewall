@@ -19,8 +19,8 @@ from flask.ext.login import (
 
 import wtforms_json
 
-from cloudfirewall.models import User
-from cloudfirewall.forms import LoginForm
+from models import User
+from forms import LoginForm
 
 
 PROTOCOLS_FILE = "protocols.txt"
@@ -131,7 +131,7 @@ def get_events():
 	
 	try:
 		# TODO: move time to configuration or use dynamic times from the UI.
-		events = firewall.get_events(time.time() - 60 * 30, time.time())
+		events = firewall.get_events(time.time() - 60 * 10, time.time())
 		for event in events:
 			event["time"] = time.ctime(event["time"])
 
@@ -289,10 +289,11 @@ def get_blocks_per_session_by_interval():
 			event_time_mins = int(event["time"]) / 60
 			ten_mins_ago_time = time.time() - 10 * 60
 			time_interval = event_time_mins - (int(ten_mins_ago_time) / 60) - 1
-			bar_chart_data['datasets']['sessions'][time_interval] += 1
 
 			if event['action'] == 'Blocked':
 				bar_chart_data['datasets']['blocks'][time_interval] += 1
+			else:
+				bar_chart_data['datasets']['sessions'][time_interval] += 1
 
 		return success('Stats table retrieved successfully', 200, bar_chart_data)
 
@@ -327,7 +328,10 @@ def get_sessions_per_protocol():
 @app.route('/SessionsPerDirectionStats', methods=['GET'])
 @login_required
 def get_sessions_per_direction():
+	"""
 
+	:return:
+	"""
 	try:
 		pie_chary_data = {
 			'Incoming': 0,
@@ -341,7 +345,6 @@ def get_sessions_per_direction():
 
 	except Exception, e:
 		return fail('Could not retrieve stats. Error: %s' % e)
-
 
 def read_protocols():
 	protocols = {}

@@ -1,20 +1,31 @@
 var appLogic;
 var appUi;
 
+/**
+ * Object the perform logical operations on the GUI
+ */
 appLogic = {
     main: function () {
         this.init();
         this.isAuthenticated();
     },
 
+    /**
+     * Initalize the appLogic instance
+     */
     init: function () {
         this.setVars();
 
         //definition for mask inputs for validation
         $.mask.definitions['x'] = "[0-2]";
         $.mask.definitions['y'] = "[0-5]";
+
+        appUi.hideTopBar();
     },
 
+    /**
+     * Sets initial global vars
+     */
     setVars: function () {
         //login section
         this.loginSection = document.querySelector("#login");
@@ -32,6 +43,7 @@ appLogic = {
      * Ajax request to server to know if current user is logged in
      */
     isAuthenticated: function(){
+        appUi.showLoader()
         $.ajax({
             url: "/isAuthenticated",
             type: "GET",
@@ -40,9 +52,12 @@ appLogic = {
             }),
             success: function(response){
                 appLogic.getDashboard();
+                appUi.showTopBar();
+                appUi.hideLoader()
             },
             error: function (response){
                 appUi.showLogin();
+                appUi.hideLoader();
             }
         });
     },
@@ -65,6 +80,7 @@ appLogic = {
                 "password": this.loginSection.querySelector('#loginInputPassword').value
             }),
             success: function(response){
+                appUi.showTopBar();
                 appLogic.getDashboard();
                 var log = "Admin has logged in";
                 appLogic.setLog(log);
@@ -98,8 +114,13 @@ appLogic = {
                 clearInterval(appLogic.blocksPerSessionStatsIntervalId);
                 clearInterval(appLogic.protocolsStatsIntervalId);
                 clearInterval(appLogic.eventsTableIntervalId);
+                appLogic.dataFlowStatsIntervalId = undefined;
+                appLogic.blocksPerSessionStatsIntervalId = undefined;
+                appLogic.protocolsStatsIntervalId = undefined;
+                appLogic.eventsTableIntervalId = undefined;
 
-                appUi.hideLoader()
+                appUi.hideTopBar();
+                appUi.hideLoader();
             },
             error: function (data){
                 appUi.showLogin()
@@ -150,7 +171,7 @@ appLogic = {
             success: function(response){
                 appUi.render.dashboardEventsTable(response.data);
                 if(appLogic.eventsTableIntervalId === undefined) {
-                    appLogic.eventsTableIntervalId = setInterval(function () {appLogic.getEventsTable()}, 10*1000);
+                    appLogic.eventsTableIntervalId = setInterval(function () {appLogic.getEventsTable()}, 5*1000);
                 }
             },
             error: function (response){
@@ -205,7 +226,7 @@ appLogic = {
                        response.data.datasets.data[i] !== undefined) {
                         appUi.myLineChart.datasets[0].points[i].value = response.data.datasets.data[i];
                     }
-                    else{
+                    else if(appUi.myLineChart.datasets[0].points[i] !== undefined){
                         appUi.myLineChart.datasets[0].points[i].value = 0;
                     }
                 }
@@ -232,8 +253,8 @@ appLogic = {
 
             }),
             success: function(response){
-                appUi.render.dataFlowStatsChart(response.data)
                 if (appLogic.dataFlowStatsIntervalId === undefined){
+                    appUi.render.dataFlowStatsChart(response.data)
                     appLogic.dataFlowStatsIntervalId = setInterval(function () {appLogic.updateDataFlowStats()}, 1*1000);
                 }
             },
@@ -256,13 +277,17 @@ appLogic = {
             }),
             success: function(response){
                 for (var i=0; i < response.data.datasets.sessions.length; i++){
-                    if (appUi.myBarChart.datasets[0].bars[i] !== undefined && response.data.datasets.sessions[i] !== undefined
-                        && appUi.myBarChart.datasets[1].bars[i] !== undefined && response.data.datasets.blocks[i] !== undefined){
+                    if (appUi.myBarChart.datasets[0].bars[i] !== undefined && response.data.datasets.sessions[i] !== undefined){
                         appUi.myBarChart.datasets[0].bars[i].value = response.data.datasets.sessions[i];
+                    }
+                    else{
+                        appUi.myBarChart.datasets[0].bars[i].value = 0;
+                    }
+                    if(appUi.myBarChart.datasets[1].bars[i] !== undefined && response.data.datasets.blocks[i] !== undefined){
                         appUi.myBarChart.datasets[1].bars[i].value = response.data.datasets.blocks[i];
                     }
                     else{
-                        break;
+                        appUi.myBarChart.datasets[1].bars[i].value = 0;
                     }
                 }
                 appUi.myBarChart.update();
@@ -285,10 +310,40 @@ appLogic = {
 
             }),
             success: function(response){
-                appUi.render.blocksPerSessionByIntervalBarChart(response.data)
                 if (appLogic.blocksPerSessionStatsIntervalId === undefined){
-                    appLogic.blocksPerSessionStatsIntervalId = setInterval(function () {appLogic.updateBlocksPerSessionStats()}, 60*1000);
+                    appUi.render.blocksPerSessionByIntervalBarChart(response.data)
+                    appLogic.blocksPerSessionStatsIntervalId = setInterval(function () {appLogic.updateBlocksPerSessionStats()}, 5*1000);
                 }
+            },
+            error: function (response){
+                appLogic.setLog(JSON.parse(response.responseText).status);
+            }
+        });
+    },
+
+    /**
+     * Updates the blocks per session graph from current data at the firewall
+     */
+    updateProtocolStats: function(){
+        $.ajax({
+            url: "/ProtocolStats",
+            type: "GET",
+            contentType: 'application/json',
+            data: JSON.stringify({
+
+            }),
+            success: function(response){
+                var i = 0
+                for (var key in response.data){
+                    if (appUi.myPieChart.segments[i] !== undefined && response.data[key] !== undefined){
+                        appUi.myPieChart.segments[i].value = response.data[key];
+                    }
+                    else{
+                        appUi.myPieChart.segments[i].value = 0;
+                    }
+                    i++;
+                }
+                appUi.myPieChart.update();
             },
             error: function (response){
                 appLogic.setLog(JSON.parse(response.responseText).status);
@@ -308,9 +363,9 @@ appLogic = {
 
             }),
             success: function(response){
-                appUi.render.ProtocolPieChart(response.data);
                 if (appLogic.protocolsStatsIntervalId === undefined){
-                    appLogic.protocolsStatsIntervalId = setInterval(function () {appLogic.getProtocolStats()}, 10*1000);
+                    appUi.render.ProtocolPieChart(response.data);
+                    appLogic.protocolsStatsIntervalId = setInterval(function () {appLogic.updateProtocolStats()}, 5*1000);
                 }
 
             },
@@ -320,11 +375,17 @@ appLogic = {
         });
     },
 
-
+    /**
+     * Gets the dashboard logs from local storage
+     */
     getLogs: function(){
         return JSON.parse(localStorgae.getItem('log'))
     },
 
+    /**
+     *
+     * @param event
+     */
     setLog: function(event){
 
         if (localStorage.getItem('log') == null){
@@ -335,7 +396,7 @@ appLogic = {
         var currentdate = new Date();
         var eventTime = currentdate.getDate() + "/"
                 + (currentdate.getMonth()+1)  + "/"
-                + currentdate.getFullYear() + " @ "
+                + currentdate.getFullYear() + ' - '
                 + currentdate.getHours() + ":"
                 + currentdate.getMinutes() + ":"
                 + currentdate.getSeconds();
@@ -345,6 +406,9 @@ appLogic = {
         appUi.render.dashboardLogger(JSON.parse(localStorage.getItem('log')))
     },
 
+    /**
+     * Clear the dashboard log
+     */
     clearLog: function(){
         localStorage.clear();
         appUi.render.dashboardLogger(JSON.parse(localStorage.getItem('log')))
@@ -353,6 +417,9 @@ appLogic = {
 
     /* Settings */
 
+    /**
+     * Get the settings section
+     */
     getSettings: function(){
         appUi.showLoader();
         $.ajax({
@@ -374,6 +441,9 @@ appLogic = {
         });
     },
 
+    /**
+     * Ajax request to server to set the firewall mode
+     */
     setMode: function(){
         $.ajax({
             url: "/mode",
@@ -395,6 +465,9 @@ appLogic = {
         });
     },
 
+    /**
+     * Ajax request to server for the firewall rules table
+     */
     getRuleTable : function(){
         $.ajax({
             url: "/rules",
@@ -412,6 +485,9 @@ appLogic = {
         });
     },
 
+    /**
+     * Ajax request to server to add new rule to firewall
+     */
     addRule: function(){
         validationResult = this.validator.validateAddRuleForm();
         if(validationResult !== 1){
@@ -449,6 +525,9 @@ appLogic = {
         });
     },
 
+    /**
+     * Ajax request to server to edit existing rule
+     */
     editRule: function(){
 
         validation = appLogic.validator.validateEditRuleForm();
@@ -492,6 +571,9 @@ appLogic = {
         });
     },
 
+    /**
+     * Ajax request to server to delete existing rule
+     */
     deleteRule: function(){
         appUi.showLoader()
         $.ajax({
@@ -521,8 +603,15 @@ appLogic = {
         });
     },
 
+    /**
+     * Validator object for input fields at the GUI
+     */
     validator: {
 
+        /**
+         * Login validator
+         * @returns {boolean} - true for success flase for failure
+         */
         validateLoginForm: function() {
             if ($('#loginInputUsername').val().length == 0   ||
                 $('#loginInputPassword').val().length == 0 ) {
@@ -531,6 +620,10 @@ appLogic = {
             return true;
         },
 
+        /**
+         * Validate that the add rule fields are non empty and in the right format
+         * @returns {number} - 1 for successs, error msg otherwise
+         */
         validateAddRuleForm: function(){
             //if ($("#addRuleDirection").val().length == 0 ||
             //    $("#addRuleSourceIp").val().length == 0 ||
@@ -547,6 +640,10 @@ appLogic = {
             return 1;
         },
 
+        /**
+         * Validate that the edit rule fields are non empty and in the right format
+         * @returns {number} - 1 for success, error msg otherwise
+         */
         validateEditRuleForm: function(){
             if ($("#editRuleNewDirection").val().length == 0 ||
                 $("#editRuleNewSourceIp").val().length == 0 ||
@@ -565,17 +662,26 @@ appLogic = {
     }
 }
 
+/**
+ * Object for rendering and manipulating UI elements
+ */
 appUi = {
     main: function () {
         this.init();
     },
 
+    /**
+     * Initalize the appUi instance
+     */
     init: function () {
         this.setVars();
         this.setEventListeners();
         Chart.defaults.global.responsive = true;
     },
 
+    /**
+     * Sets initial global vars
+     */
     setVars: function () {
         this.signupSection = $("#signup");
         this.loginSection = $("#login");
@@ -593,6 +699,9 @@ appUi = {
         this.myPieChart;
     },
 
+    /**
+     * Sets UI events listerners
+     */
     setEventListeners: function () {
         $("#errorModal button").get(0).addEventListener("click" , this.hideError.bind(this));
         $("#top_bar .dashboardLink").get(0).addEventListener("click", appLogic.getDashboard.bind(appLogic));
@@ -611,68 +720,106 @@ appUi = {
         $("#editCloseButton").get(0).addEventListener("click", appUi.hideEditRuleModal.bind(appUi));
     },
 
+    /**
+     * Render the Login section
+     */
     showLogin: function(){
         this.hideAllSections();
         this.loginSection.removeClass('hidden');
         this.showBackgroundImage();
     },
 
+    /**
+     * Hiding the Login section
+     */
     hideLogin: function(){
         this.loginSection.addClass('hidden');
         this.hideBackgroundImage();
     },
 
-    showSignup: function(){
-        this.signupSection.removeClass('hidden');
-    },
-
-    hideSignup: function(){
-        this.signupSection.addClass('hidden');
-    },
-
+    /**
+     * Render the dashboard section
+     */
     showDashboard: function(){
         this.hideAllSections();
         this.dashboardSection.removeClass('hidden');
     },
 
+    /**
+     * Hide the dashboard section
+     */
     hideDashboard: function(){
         this.dashboardSection.addClass('hidden');
     },
 
+    /**
+     * Render the settings section
+     */
     showSettings: function(){
         this.hideAllSections();
         this.settingsSection.removeClass('hidden');
     },
 
+    /**
+     * Hiding the settings section
+     */
     hideSettings: function(){
         this.settingsSection.addClass('hidden');
     },
 
+    /**
+     * Showing the bacground image
+     */
     showBackgroundImage: function(){
         $("body").addClass("backgroundimage");
     },
 
+    /**
+     * Hiding the background image
+     */
     hideBackgroundImage: function(){
         $("body").removeClass("backgroundimage");
     },
 
+    /**
+     * Display modal pop up window with the msg given
+     * @param err - The message to display
+     */
     showError: function(err){
         document.querySelector("#errorModal #errorMsg").innerHTML = err;
         this.errorModal.modal();
     },
 
+    /**
+     * Hiding the error modal
+     */
     hideError: function(){
         this.errorModal.modal('hide');
     },
 
+    /**
+     * Show loading progress bar modal
+     */
     showLoader: function(){
         this.loadingModal.modal();
     },
 
+    /**
+     * Hiding the loading modal
+     */
     hideLoader: function(){
         this.loadingModal.modal('hide');
     },
 
+    /**
+     * Render the edit modal
+     * @param direction - Rule direction
+     * @param sourceIp - Rule source ip
+     * @param sourcePort - Rule source port
+     * @param destinationIp - Rule destination ip
+     * @param destinationPort - Rule destination port
+     * @param protocol - Rule protocol
+     */
     showEditRuleModal: function(direction, sourceIp, sourcePort, destinationIp, destinationPort, protocol){
         $("#editRuleId").html(event.currentTarget.parentElement.parentElement.getElementsByTagName("td")[0].textContent)
 
@@ -700,24 +847,35 @@ appUi = {
         this.editRuleModal.modal();
     },
 
+    /**
+     * Hiding the edit modal
+     */
     hideEditRuleModal: function(){
         $("#editRuleError").empty()
         this.editRuleModal.modal('hide');
     },
 
+    /**
+     * Hiding all UI section (Login, Settings, Dashboard)
+     */
     hideAllSections: function() {
         this.hideLogin();
         this.hideDashboard();
         this.hideSettings();
     },
 
-    getRandomColor: function(num) {
-        var letters = '0123456789ABCDEF'.split('');
-        var color = '#';
-        for (var i = 0; i < 6; i++ ) {
-            color += letters[Math.floor((1/num) * 16)];
-        }
-        return color;
+    /**
+     * Display the top bar
+     */
+    showTopBar: function(){
+        $("#top_bar").show()
+    },
+
+    /**
+     * Hides the top bar
+     */
+    hideTopBar: function() {
+        $("#top_bar").hide()
     },
 
     /**
@@ -793,6 +951,10 @@ appUi = {
             }
         },
 
+        /**
+         * Render the edit rule modal in the UI
+         * @param event
+         */
         editRule: function(event){
             var rule = event.currentTarget.parentElement.parentElement.getElementsByTagName("td");
             var direction = rule[2].textContent;
@@ -804,7 +966,6 @@ appUi = {
 
             appUi.showEditRuleModal(direction, sourceIp, sourcePort, destinationIp, destinationPort, protocol);
         },
-
 
         dashboard: function (tableData) {
             this.dashboardEventsTable(tableData);
@@ -822,14 +983,15 @@ appUi = {
                 actionColor = (tableData[i].action === "Allowed") ? "green" : "red";
                 dashboardTableBody.append(
                     "<tr>" +
-                        "<td width='7%'>" + (tableData.length - i) + "</td>" +
-                        "<td width='20%'>" + tableData[i].time + "</td>" +
-                        "<td width='15%'><font color=" + actionColor + ">" + tableData[i].action + "</font></td>" +
+                        "<td width='2%'>" + (tableData.length - i) + "</td>" +
+                        "<td width='15%'>" + tableData[i].time + "</td>" +
+                        "<td width='10%'><font color=" + actionColor + ">" + tableData[i].action + "</font></td>" +
+                        "<td width='10%'>" + tableData[i].direction + "</td>" +
                         "<td width='15%'>" + tableData[i].src_ip + "</td>" +
                         "<td width='15%'>" + tableData[i].dst_ip + "</td>" +
-                        "<td width='15%'>" + tableData[i].protocol + "</td>" +
-                        "<td width='20%'>" + tableData[i].src_port + "</td>" +
-                        "<td width='20%'>" + tableData[i].dst_port + "</td>" +
+                        "<td width='10%'>" + tableData[i].protocol + "</td>" +
+                        "<td width='15%'>" + tableData[i].src_port + "</td>" +
+                        "<td width='15%'>" + tableData[i].dst_port + "</td>" +
                     "</tr>");
             }
         },
@@ -971,70 +1133,6 @@ appUi = {
             appUi.myBarChart = new Chart(ctx).Bar(barChartData, options);
         },
 
-        radarChart: function(data){
-            var ctx = $("#" + graphId).get(0).getContext("2d");
-
-            var options = {
-                //Boolean - Whether to show lines for each scale point
-                scaleShowLine : true,
-
-                //Boolean - Whether we show the angle lines out of the radar
-                angleShowLineOut : true,
-
-                //Boolean - Whether to show labels on the scale
-                scaleShowLabels : false,
-
-                // Boolean - Whether the scale should begin at zero
-                scaleBeginAtZero : true,
-
-                //String - Colour of the angle line
-                angleLineColor : "rgba(0,0,0,.1)",
-
-                //Number - Pixel width of the angle line
-                angleLineWidth : 1,
-
-                //String - Point label font declaration
-                pointLabelFontFamily : "'Arial'",
-
-                //String - Point label font weight
-                pointLabelFontStyle : "normal",
-
-                //Number - Point label font size in pixels
-                pointLabelFontSize : 10,
-
-                //String - Point label font colour
-                pointLabelFontColor : "#666",
-
-                //Boolean - Whether to show a dot for each point
-                pointDot : true,
-
-                //Number - Radius of each point dot in pixels
-                pointDotRadius : 3,
-
-                //Number - Pixel width of point dot stroke
-                pointDotStrokeWidth : 1,
-
-                //Number - amount extra to add to the radius to cater for hit detection outside the drawn point
-                pointHitDetectionRadius : 20,
-
-                //Boolean - Whether to show a stroke for datasets
-                datasetStroke : true,
-
-                //Number - Pixel width of dataset stroke
-                datasetStrokeWidth : 2,
-
-                //Boolean - Whether to fill the dataset with a colour
-                datasetFill : true,
-
-                //String - A legend template
-                legendTemplate : "<ul class=\"<%=name.toLowerCase()%>-legend\"><% for (var i=0; i<datasets.length; i++){%><li><span style=\"background-color:<%=datasets[i].strokeColor%>\"></span><%if(datasets[i].label){%><%=datasets[i].label%><%}%></li><%}%></ul>"
-
-            }
-
-            var myRadarChart = new Chart(ctx).Radar(data, options);
-        },
-
-
         /**
          * Render pie chart with protocols statistics
          * @param data - The protocols data from firewall
@@ -1101,7 +1199,7 @@ appUi = {
 
             var log = "";
             for(var i = 0; i < events.length; i++){
-                log += "(" + events[i].time + ") - " + events[i].event + "\n";
+                log += "" + events[i].time + " - " + events[i].event + "\n";
             }
             logger.val(logger.val() + log);
 
@@ -1112,6 +1210,8 @@ appUi = {
     }
 }
 
-
+/**
+ * Starting the app logic and ui
+ */
 appUi.main();
 appLogic.main();
