@@ -1,8 +1,8 @@
 firewall_dpid: 200
 flow_active_time_secs: 60
 flow_starts_retrieval_interval_secs: 1
-mode: WhiteList
 time_to_keep_stats_secs: 600
+mode: WhiteList
 
 physical_ports:
     incoming: 1
@@ -21,17 +21,59 @@ blacklist_rules:
     protocol: TCP/UDP
     src_ip: '*'
     src_port: '*'
+-   direction: Outgoing
+    dst_ip: 10.0.0.3
+    dst_port: '*'
+    protocol: TCP/UDP
+    src_ip: 10.0.0.1
+    src_port: '*'
+-   direction: Incoming
+    dst_ip: 10.0.0.2
+    dst_port: 23
+    protocol: TCP/UDP
+    src_ip: 10.0.0.4
+    src_port: '*'
 
 whitelist_rules:
+-   direction: Outgoing
+    dst_ip: 10.0.0.3
+    dst_port: '*'
+    protocol: TCP/UDP
+    src_ip: 10.0.0.1
+    src_port: '*'
+-   direction: Incoming
+    dst_ip: '*'
+    dst_port: 23
+    protocol: TCP/UDP
+    src_ip: '*'
+    src_port: '*'
+-   direction: Incoming
+    dst_ip: '*'
+    dst_port: 21
+    protocol: TCP/UDP
+    src_ip: '*'
+    src_port: '*'
+-   direction: Incoming
+    dst_ip: 10.0.02
+    dst_port: 443
+    protocol: TCP
+    src_ip: 10.0.0.4
+    src_port: '*'
+-   direction: Outgoing
+    dst_ip: '*'
+    dst_port: 80
+    protocol: TCP
+    src_ip: '*'
+    src_port: '*'
 -   direction: Incoming
     dst_ip: 10.0.0.1
     dst_port: '*'
     protocol: TCP/UDP
     src_ip: 10.0.0.3
     src_port: '*'
--   direction: Outgoing
-    dst_ip: 10.0.0.3
-    dst_port: '*'
-    protocol: TCP/UDP
+-   direction: Incoming
+    dst_ip: '*'
+    dst_port: 67
+    protocol: UDP
     src_ip: 10.0.0.1
     src_port: '*'
