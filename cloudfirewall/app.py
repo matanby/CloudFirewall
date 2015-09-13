@@ -346,6 +346,7 @@ def get_sessions_per_direction():
 	except Exception, e:
 		return fail('Could not retrieve stats. Error: %s' % e)
 
+
 def read_protocols():
 	protocols = {}
 	with open(PROTOCOLS_FILE, 'r') as f:
