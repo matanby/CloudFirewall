@@ -1,4 +1,4 @@
-from wtforms import StringField, PasswordField, validators
+from wtforms import StringField, validators
 
 
 class User(object):

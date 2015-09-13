@@ -1,7 +1,7 @@
-import requests
 from cmd import Cmd
 from urlparse import urljoin
-import json
+
+import requests
 
 
 class CloudFirewallAPI(object):
