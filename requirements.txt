@@ -7,3 +7,4 @@ Flask-SocketIO==0.6.0
 Pyro4==4.39
 PyYAML==3.11
 requests==2.7.0
+terminaltables==1.2.1
