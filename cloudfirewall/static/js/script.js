@@ -509,7 +509,7 @@ appLogic = {
             }),
             success: function(response){
                 appLogic.getSettings();
-                var log = "Added The next rule to firewall: " +
+                var log = "Added firewall rule: " +
                     "Direction: " + response.data.direction + ", " +
                     "Source IP: " + response.data.sourceIp + ", " +
                     "Source Port: " + response.data.sourcePort + ", " +
