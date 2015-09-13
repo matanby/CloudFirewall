@@ -18,6 +18,7 @@ from flask.ext.login import (
 )
 
 import wtforms_json
+from cloudfirewall import config
 
 from models import User
 from forms import LoginForm
@@ -131,9 +132,10 @@ def get_events():
 	
 	try:
 		# TODO: move time to configuration or use dynamic times from the UI.
-		events = firewall.get_events(time.time() - 60 * 10, time.time())
+		current_time = time.time()
+		events = firewall.get_events(current_time - config.FW_EVENTS_QUERY_INTERVAL_SECS, current_time)
 		for event in events:
-			event["time"] = time.ctime(event["time"])
+			event['time'] = time.ctime(event['time'])
 
 		return success('Events table retrieved successfully', 200, events)
 
@@ -251,17 +253,20 @@ def delete_rule():
 
 @app.route('/DataFlowStats', methods=['GET'])
 @login_required
-def get_fw_data_stats():
+def get_fw_data_flow_stats():
+	"""
+	Returns events that occurred in the FW in the past few minutes (as stated in the config).
+	"""
+
 	try:
-		data = firewall.get_total_bandwidth(time.time() - 1 * 60, time.time())
-		labels = [time.ctime(float(t)).split()[3] if (int(float(t)) % 10 == 0) else " " for t in sorted(data.keys())]
+		current_time = time.time()
+		data = firewall.get_total_bandwidth(current_time - config.FW_FLOW_DATA_QUERY_INTERVAL_SECS, current_time)
+		labels = [time.ctime(float(t)).split()[3] if (int(float(t)) % 10 == 0) else ' ' for t in sorted(data.keys())]
 		values = [v for k, v in sorted(data.iteritems())]
 
 		line_chart_data = {
 			"labels": labels,
-			"datasets": {
-				"data": values
-			}
+			"datasets": {"data": values}
 		}
 
 		return success('Data flow stats table retrieved successfully', 200, line_chart_data)
@@ -274,28 +279,35 @@ def get_fw_data_stats():
 @app.route('/BlocksPerSessionByIntervalStats', methods=['GET'])
 @login_required
 def get_blocks_per_session_by_interval():
+	"""
+	Returns the total number of blocked sessions and allowed
+	sessions in the past few minutes (as stated in the config).
+	"""
+
 	try:
+		minutes = config.FW_BLOCKS_AND_ALLOWS_QUERY_INTERVAL_MINS
 		bar_chart_data = {
-			'labels': ["10 mins ago", "9 mins ago", "8 mins ago", "7 mins ago", "6 mins ago", "5 mins ago", "4 mins ago", "3 mins ago", "2 mins ago", "1 mins ago"],
+			'labels': ['%s mins ago' % x for x in (m for m in xrange(minutes, 0, -1))],
 			'datasets': {
-				'sessions': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-				'blocks': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+				'sessions': [0] * minutes,
+				'blocks': [0] * minutes,
 			}
 		}
 
-		last_10_mins_events = firewall.get_events(time.time() - 10 * 60, time.time())
+		current_time = time.time()
+		query_start_time = current_time - minutes * 60
+		events = firewall.get_events(query_start_time, current_time)
 
-		for event in last_10_mins_events:
-			event_time_mins = int(event["time"]) / 60
-			ten_mins_ago_time = time.time() - 10 * 60
-			time_interval = event_time_mins - (int(ten_mins_ago_time) / 60) - 1
+		for event in events:
+			event_time_mins = int(event['time']) / 60
+			time_interval = event_time_mins - (int(query_start_time) / 60) - 1
 
 			if event['action'] == 'Blocked':
 				bar_chart_data['datasets']['blocks'][time_interval] += 1
 			else:
 				bar_chart_data['datasets']['sessions'][time_interval] += 1
 
-		return success('Stats table retrieved successfully', 200, bar_chart_data)
+		return success('Blocks and allows stats retrieved successfully', 200, bar_chart_data)
 
 	except Exception, e:
 		return fail('Could not retrieve stats. Error: %s' % e)
@@ -307,47 +319,30 @@ def get_sessions_per_protocol():
 	try:
 		pie_chart_data = {}
 
-		for event in firewall.get_events(time.time() - 10 * 60, time.time()):
+		current_time = time.time()
+		for event in firewall.get_events(current_time - config.FW_SESSIONS_PER_PROTOCOL_QUERY_INTERVAL_SECS, current_time):
 			dst_port = event["dst_port"]
 			if dst_port in PROTOCOLS_BY_PORT:
 				protocol = PROTOCOLS_BY_PORT[dst_port] + " (%s)" % dst_port
 			else:
 				protocol = str(dst_port)
 
-			if protocol not in pie_chart_data:
-				pie_chart_data[protocol] = 1
-			else:
-				pie_chart_data[protocol] += 1
+			pie_chart_data.setdefault(protocol, 1)
+			pie_chart_data[protocol] += 1
 
-		return success('Stats table retrieved successfully', 200, pie_chart_data)
-
-	except Exception, e:
-		return fail('Could not retrieve stats. Error: %s' % e)
-
-
-@app.route('/SessionsPerDirectionStats', methods=['GET'])
-@login_required
-def get_sessions_per_direction():
-	"""
-
-	:return:
-	"""
-	try:
-		pie_chary_data = {
-			'Incoming': 0,
-			'Outgoing': 0
-		}
-
-		for event in firewall.get_events(time.time() - 60 * 10, time.time()):
-			pie_chary_data[event["direction"]] += 1
-
-		return success('Stats table retrieved successfully', 200, pie_chary_data)
+		return success('Sessions per protocol stats retrieved successfully', 200, pie_chart_data)
 
 	except Exception, e:
 		return fail('Could not retrieve stats. Error: %s' % e)
 
 
 def read_protocols():
+	"""
+	Reads the protocols file and creates a mapping
+	between a port number and a protocol name.
+	:return:
+	"""
+
 	protocols = {}
 	with open(PROTOCOLS_FILE, 'r') as f:
 		for line in f.readlines():
