@@ -18,7 +18,7 @@ from flask.ext.login import (
 )
 
 import wtforms_json
-from cloudfirewall import config
+import config
 
 from models import User
 from forms import LoginForm
@@ -357,4 +357,4 @@ def read_protocols():
 PROTOCOLS_BY_PORT = read_protocols()
 
 if __name__ == '__main__':
-	app.run()
+	app.run(host='')
