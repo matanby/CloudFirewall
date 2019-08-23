@@ -11,7 +11,7 @@ It also features a simple web based UI which can be used to manage settings and 
 
 CloudFirewall is implemented as an [SDN controller][3], which is programmed to forward or block certain TCP/UDP flows, where a TCP/UDP flow can be uniquely identified by the five-tuple of _< source IP, destination IP, transport protocol type, source port, destination port >_.
 This SDN controller controls, using the [OpenFlow][5] protocol, an underlying [SDN switch][4] which interconnects two different networks. 
-![CloudFirewall interconnecting two different networks](http://snag.gy/uVB6o.jpg)
+![CloudFirewall interconnecting two different networks](https://raw.githubusercontent.com/matanby/CloudFirewall/master/images/firewall-network.png)
 
 Whenever a packet starting a new flow is received at this switch, it forwards it to the controller, which in turn decides whether this flow should be forwarded to the other network or otherwise blocked altogether.  This decision based upon the firewall's current work mode (white-list / black-list / pass-through) and its current defined rules set. When such decision is made by the controller, it installs an appropriate forwarding rule in the switch so that future packets belonging to the same flow will be handled in the same manner.
 
@@ -34,7 +34,7 @@ The front-end is simplemented as a single page application, and is written in HT
 For rendering the visual charts, we used the [charts.js][11] library.
 You can find the code unser the *cloudfirewall* folder.
 
-![CloudFirewall's internal structure](http://snag.gy/sXmUw.jpg)
+![CloudFirewall's internal structure](https://raw.githubusercontent.com/matanby/CloudFirewall/master/images/cloudfirewall_internals.png)
 
 ----------
 
@@ -92,11 +92,11 @@ Alternatively, simply grab the preinstalled Mininet 2.1.0 64 bit VM (**make sure
 Here are a couple of screenshots of the web UI:
 
 The dashboard:
-![CloudFirewall's dashboard](http://snag.gy/pTsfi.jpg)
+![CloudFirewall's dashboard](https://raw.githubusercontent.com/matanby/CloudFirewall/master/images/dashboard.png)
 
 
 The settings section:
-![CloudFirewall's settings section](http://snag.gy/nNR51.jpg)
+![CloudFirewall's settings section](https://raw.githubusercontent.com/matanby/CloudFirewall/master/images/settings.png)
 
 ----------
 
