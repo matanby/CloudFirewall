@@ -5,6 +5,6 @@ Flask==1.0
 Flask-Login==0.2.11
 Flask-SocketIO==0.6.0
 Pyro4==4.39
-PyYAML==5.1
+PyYAML==5.4
 requests==2.20.0
 terminaltables==1.2.1
